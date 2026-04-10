@@ -26,7 +26,7 @@ AggregatedCounts AS (
 SELECT
     cd.dsa_id,
     cd.entity_id,
-    cd.channel_type,
+    -- cd.channel_type,   --verification needed 
     cd.company_name,
     cd.isActive,
     cd.isDormant,
@@ -46,14 +46,14 @@ SELECT
 
 
 
-    em.empID   AS mapped_employee_id,
+    -- em.empID   AS mapped_employee_id,  --- --verification needed
     COALESCE(br.covered_branch_count, 0) AS covered_branch_count,
     cd.record_created_at,
     cd.record_modified_at,
     CURRENT_TIMESTAMP AS silver_loaded_at,
     TO_CHAR(GETDATE(),'YYYYMMDD_HH24MISS') AS silver_batch_id
 FROM CombinedData cd
-LEFT JOIN  tblDsaEmployeeMapping em ON cd.dsa_id = em.dsaid
+-- LEFT JOIN  tblDsaEmployeeMapping em ON cd.dsa_id = em.dsaid -- --verification needed
 LEFT JOIN AggregatedCounts br ON cd.entity_id = br.entity_id
 LEFT JOIN dmihfclos.tblTypeDetail approval ON cd.approval_status_id = approval.typeDetailID
 ORDER BY cd.dsa_id;
