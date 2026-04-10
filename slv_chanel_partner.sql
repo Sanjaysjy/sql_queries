@@ -46,7 +46,7 @@ SELECT
 
 
 
-    em.empID   AS mapped_employee_id
+    em.empID   AS mapped_employee_id,
     COALESCE(br.covered_branch_count, 0) AS covered_branch_count,
     cd.record_created_at,
     cd.record_modified_at,
