@@ -1,4 +1,3 @@
-WITH MonthlyLoanPerformance AS (
   SELECT
     lm.loanMonthlyID AS loan_monthly_id,
     lm.loanApplicationID AS loan_application_id,
@@ -46,36 +45,4 @@ WITH MonthlyLoanPerformance AS (
   FROM
     dmihfclos.tblLoanMonthly lm
   LEFT JOIN
-    dmihfclos.tblTypeDetail td ON lm.maxDeliquencyDay = td.typeDetailID
-)
-SELECT
-  loan_monthly_id,
-  loan_application_id,
-  snapshot_date,
-  pos,
-  sell_pos,
-  due_interest,
-  due_principal,
-  previous_due,
-  max_dpd,
---   dpd_bucket,
-  is_npa,
-  npa_start_date,
-  asset_classification,
-  is_restructured,
---   ecl_stage,
---   probability_of_default,
---   loss_given_default,
-  provisions_value,
-  risk_weight,
-  source_funding_name,
-  liability_code,
-  roi,
-  balance_tenur,
---   loan_status,
-  record_created_at,
-  record_modified_at,
-  silver_loaded_at,
-  silver_batch_id
-FROM
-  MonthlyLoanPerformance;
+    dmihfclos.tblTypeDetail td ON lm.maxDeliquencyDay = td.typeDetailID;
