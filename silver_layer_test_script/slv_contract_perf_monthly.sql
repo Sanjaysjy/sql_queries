@@ -46,4 +46,4 @@
     dmihfclos.tblLoanMonthly lm
   LEFT JOIN
     dmihfclos.tblTypeDetail td ON lm.maxDeliquencyDay = td.typeDetailID
-        and  isactive=1
+        and  td.isactive=1
