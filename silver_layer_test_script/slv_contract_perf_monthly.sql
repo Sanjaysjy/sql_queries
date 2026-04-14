@@ -11,10 +11,10 @@
     lm.isNPA AS is_npa,
     lm.npaStartDate AS npa_start_date,
     lm.assetClassification AS asset_classification,
-    CASE 
+    CASE
     WHEN lm.isRestructured IN ('1') THEN TRUE
     WHEN lm.isRestructured IN ('0','NULL') THEN FALSE
-    END AS is_restructured, -- 1 = ture but null = false for now have to ask 
+    END AS is_restructured, -- 1 = ture but null = false for now have to ask
 
 --     td. AS dpd_bucket,   --- need's comfirmation
 --     --need clarification on dpd days for staging
@@ -29,7 +29,7 @@
 --     lm.probability_of_default
 --     lm.loss_given_default
 -- confirmation on which column to use
---     lm. AS  loan_status, 
+--     lm. AS  loan_status,
 --
 
     lm.provisionsValue AS provisions_value,
@@ -45,4 +45,5 @@
   FROM
     dmihfclos.tblLoanMonthly lm
   LEFT JOIN
-    dmihfclos.tblTypeDetail td ON lm.maxDeliquencyDay = td.typeDetailID;
+    dmihfclos.tblTypeDetail td ON lm.maxDeliquencyDay = td.typeDetailID
+        and  isactive=1
