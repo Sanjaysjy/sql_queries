@@ -1,3 +1,4 @@
+-- slv_channel_partner
 WITH CombinedData AS (
     SELECT
         dsa.dsaID AS dsa_id,
@@ -14,7 +15,7 @@ WITH CombinedData AS (
     LEFT JOIN dmihfclos.tblEntity entity ON dsa.entityID = entity.entityID
     LEFT JOIN dmihfclos.tblTypeDetail typeDetail ON dsa.channelTypeTypeDetailID = typeDetail.typeDetailID
     LEFT JOIN dmihfclos.tblDsaRenewal renewal ON dsa.dsaID = renewal.dsaID
-    WHERE dsa.isActive = 1
+    WHERE dsa.isActive = 1 --and dsa_id = 455
 ),
 AggregatedCounts AS (
     SELECT
@@ -26,7 +27,7 @@ AggregatedCounts AS (
 SELECT
     cd.dsa_id,
     cd.entity_id,
-    -- cd.channel_type,   --verification needed 
+    -- cd.channel_type,   --verification needed
     cd.company_name,
     cd.isActive,
     cd.isDormant,
@@ -36,15 +37,12 @@ SELECT
         WHEN approval.typeDetailDescription = 'Initiated' THEN 'FI Positive'
         ELSE 'FI Negative'
     END AS fi_status,
-
+ 
     /* WIP - logic not defined */
-
+ 
 --     NULL AS wip_branch_count,
 --     NULL AS wip_ho_count,
 --     NULL AS wip_fcu_count,
-
-
-
 
     -- em.empID   AS mapped_employee_id,  --- --verification needed
     COALESCE(br.covered_branch_count, 0) AS covered_branch_count,
@@ -56,4 +54,4 @@ FROM CombinedData cd
 -- LEFT JOIN  tblDsaEmployeeMapping em ON cd.dsa_id = em.dsaid -- --verification needed
 LEFT JOIN AggregatedCounts br ON cd.entity_id = br.entity_id
 LEFT JOIN dmihfclos.tblTypeDetail approval ON cd.approval_status_id = approval.typeDetailID
-ORDER BY cd.dsa_id;
+ORDER BY cd.dsa_id
