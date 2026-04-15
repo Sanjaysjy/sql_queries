@@ -1,3 +1,7 @@
+CREATE TABLE silver.slv_employee
+DISTKEY(employee_id)
+SORTKEY(employee_id)
+AS
 WITH emp_dedup AS (
     SELECT
         employeeid,
@@ -32,7 +36,7 @@ loan_agg AS (
         COUNT(DISTINCT loan_application_id) AS loans_onboarded_total,
         COUNT(
             CASE
-                WHEN date_trunc('month', disbursal_date) = date_trunc('month', CURRENT_DATE)
+                WHEN date_trunc('month', last_disbursal_date) = date_trunc('month', CURRENT_DATE)
                 THEN 1
             END  ) AS loans_onboarded_mtd,
         SUM(COALESCE(total_disbursed_amount, 0)) AS total_disbursed_amount
@@ -55,8 +59,6 @@ loan_agg AS (
             ELSE (COALESCE(rd.securedamount,0) / rd.totalamount) * 100
         END AS collection_efficiency_pct,
 
-        COUNT(CASE WHEN c.pos > 0 THEN 1 END) AS active_loan_count,
-
         COUNT(CASE WHEN c.max_dpd > 0 THEN 1 END) AS dpd_loans,
 
         CASE
@@ -65,16 +67,19 @@ loan_agg AS (
                 (COUNT(CASE WHEN c.max_dpd > 0 THEN 1 END)::decimal
                 / COUNT(CASE WHEN c.pos > 0 THEN 1 END)) * 100
         END AS dpd_rate_pct,
-        CASE
-            WHEN c.pos > 0
-            THEN (c.npa_pos / c.pos) * 100
-        END AS npa_rate_pct
-
+        CAST(
+        ROUND(
+            SUM(
+                CASE
+                    WHEN UPPER(TRIM(is_npa)) IN ('1','TRUE','Y')  THEN pos  ELSE 0
+                END )
+            / NULLIF(SUM(pos), 0) * 100, 2)
+        AS DECIMAL(6,2)) AS npa_rate_pct
     FROM silver.slv_contract_perf_monthly c
     left join dmihfclos.tblapplicantriskdetail rd
     on rd.loanapplicationid = c.loan_application_id
     and isactive = 1
-    GROUP BY c.loan_application_id,rd.loanapplicationid,rd.totalamount,rd.securedamount,c.pos ,c.is_npa
+    GROUP BY c.loan_application_id,rd.loanapplicationid,rd.totalamount,rd.securedamount,c.pos ,c.is_npa, rd.unsecuredamount
 )
 SELECT
     CAST(e.employeeid AS BIGINT)   AS employee_id,
@@ -109,10 +114,10 @@ SELECT
     TO_CHAR(GETDATE(),'YYYYMMDD_HH24MISS') AS silver_batch_id
 
 FROM emp_dedup e
-LEFT JOIN cte_mstbranch mb
-    ON la.entityid = e.entityid
 LEFT JOIN loan_agg la
     ON la.sales_officer_emp_id = e.employeeid
+LEFT JOIN cte_mstbranch mb
+    ON mb.entityid = e.entityid
 LEFT JOIN portfolio_metrics pa
     ON pa.loan_application_id = e.employeeid
 WHERE e.rn = 1;
