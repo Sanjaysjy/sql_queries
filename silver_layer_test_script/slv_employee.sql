@@ -23,12 +23,14 @@ WITH emp_dedup AS (
             ORDER BY lastmodifiedon DESC NULLS LAST
         ) AS rn
     FROM dmihfclos.tblemployee
+    where isactive =1
 ),
     cte_mstbranch  as(
         select
             branchname,
             entityid
     FROM dmihfclos.mstBranch
+    where isactive =1
 ),
 loan_agg AS (
     SELECT
@@ -44,42 +46,58 @@ loan_agg AS (
     GROUP BY sales_officer_emp_id
 )
 -- Portfolio metrics
-, portfolio_metrics AS (
+,portfolio_metrics AS (
     SELECT
-        c.loan_application_id,
+        ld.sales_officer_emp_id AS employee_id,
+
         COUNT(CASE WHEN c.pos > 0 THEN 1 END) AS active_loan_count,
         SUM(c.pos) AS current_book_pos,
+
         COUNT(CASE WHEN c.max_dpd > 0 THEN 1 END) AS loans_in_dpd,
-        COUNT(CASE WHEN c.is_npa = 1 THEN 1 END) AS loans_in_npa,
+
+        COUNT(CASE 
+            WHEN UPPER(TRIM(c.is_npa)) IN ('1','TRUE','Y')
+            THEN 1 
+        END) AS loans_in_npa,
+
         SUM(c.due_interest + c.due_principal) AS total_arrears_amount,
-        rd.loanapplicationid,
+
         CASE
-            WHEN COALESCE(rd.unsecuredamount,0) = 0
-                THEN 0
-            ELSE (COALESCE(rd.securedamount,0) / rd.totalamount) * 100
+            WHEN SUM(rd.totalamount) = 0 THEN 0
+            ELSE (SUM(rd.securedamount) / SUM(rd.totalamount)) * 100
         END AS collection_efficiency_pct,
 
-        COUNT(CASE WHEN c.max_dpd > 0 THEN 1 END) AS dpd_loans,
-
+        -- DPD %
         CASE
             WHEN COUNT(CASE WHEN c.pos > 0 THEN 1 END) > 0
-            THEN
-                (COUNT(CASE WHEN c.max_dpd > 0 THEN 1 END)::decimal
-                / COUNT(CASE WHEN c.pos > 0 THEN 1 END)) * 100
+            THEN (
+                COUNT(CASE WHEN c.max_dpd > 0 THEN 1 END)::DECIMAL
+                / COUNT(CASE WHEN c.pos > 0 THEN 1 END)
+            ) * 100
         END AS dpd_rate_pct,
+
+        -- NPA %
         CAST(
-        ROUND(
-            SUM(
-                CASE
-                    WHEN UPPER(TRIM(is_npa)) IN ('1','TRUE','Y')  THEN pos  ELSE 0
-                END )
-            / NULLIF(SUM(pos), 0) * 100, 2)
+            ROUND(
+                SUM(
+                    CASE
+                        WHEN UPPER(TRIM(c.is_npa)) IN ('1','TRUE','Y')
+                        THEN c.pos ELSE 0
+                    END
+                ) / NULLIF(SUM(c.pos), 0) * 100,
+            2)
         AS DECIMAL(6,2)) AS npa_rate_pct
+
     FROM silver.slv_contract_perf_monthly c
-    left join dmihfclos.tblapplicantriskdetail rd
-    on rd.loanapplicationid = c.loan_application_id
-    and isactive = 1
-    GROUP BY c.loan_application_id,rd.loanapplicationid,rd.totalamount,rd.securedamount,c.pos ,c.is_npa, rd.unsecuredamount
+
+    JOIN silver.slv_loan_details ld
+        ON c.loan_application_id = ld.loan_application_id
+
+    LEFT JOIN dmihfclos.tblapplicantriskdetail rd
+        ON rd.loanapplicationid = c.loan_application_id
+       AND rd.isactive = 1
+
+    GROUP BY ld.sales_officer_emp_id
 )
 SELECT
     CAST(e.employeeid AS BIGINT)   AS employee_id,
@@ -113,11 +131,10 @@ SELECT
     CURRENT_TIMESTAMP AS silver_loaded_at,
     TO_CHAR(GETDATE(),'YYYYMMDD_HH24MISS') AS silver_batch_id
 
-FROM emp_dedup e
+FROM emp_dedup e   
 LEFT JOIN loan_agg la
     ON la.sales_officer_emp_id = e.employeeid
 LEFT JOIN cte_mstbranch mb
     ON mb.entityid = e.entityid
 LEFT JOIN portfolio_metrics pa
-    ON pa.loan_application_id = e.employeeid
-WHERE e.rn = 1;
+ON pa.employee_id = e.employeeid
