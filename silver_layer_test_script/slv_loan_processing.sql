@@ -77,6 +77,17 @@ SELECT
     CAST(pd.dateperformed AS DATE) AS pd_done_date,
     CAST(pd.pdstatustypedetailid AS VARCHAR(100)) AS pd_status,
     CAST(sh.applicationaccepteddate AS DATE) AS file_acceptance_date,
+
+--   11.  welcome_kit_status -->> needs confirmation on this logic derived
+--     CASE
+--         WHEN isFullyDisbursed = 1 THEN 'Updated'
+--         ELSE 'Pending'
+--     END AS welcome_kit_status
+--  12 .    ldd.cersaiID as cersai_number
+
+--   13.  no related field  found for this
+--     cersai_date
+
     CAST(da.record_created_at AS TIMESTAMP) AS record_created_at,
     CAST(da.record_modified_at AS TIMESTAMP) AS record_modified_at,
     CURRENT_TIMESTAMP AS silver_loaded_at,
@@ -88,3 +99,5 @@ LEFT JOIN cte_pd_deduped pd
     ON pd.loanapplicationid = da.loanapplicationid
 LEFT JOIN cte_status_history_deduped sh
     ON sh.loanapplicationid = da.loanapplicationid
+LEFT JOIN dmihfclos.tblLoanApplicationDisbursalDetail ldd
+    ON  ldd.loanapplicationid = da.loanapplicationid
