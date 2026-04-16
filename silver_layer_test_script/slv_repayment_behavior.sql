@@ -6,6 +6,7 @@ SORTKEY(pay_schedule_id)
 AS
 
 
+
 WITH ps_dedup AS (
     SELECT
         payscheduleid,
