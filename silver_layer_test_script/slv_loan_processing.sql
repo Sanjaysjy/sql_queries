@@ -8,16 +8,12 @@ WITH cte_disbursal_agg AS (
         loanapplicationid,
         CAST(COUNT(*) AS INTEGER) AS total_tranches,
         MAX(disburseddate) AS last_tranche_date,
-
         MIN(createdon) AS record_created_at,
         MAX(lastmodifiedon) AS record_modified_at
     FROM dmihfclos.tblloanapplicationdisbursmentfavouring
     where isactive= 1
     GROUP BY loanapplicationid
-)
--- select count(*) from cte_disbursal_agg
--- 43762
-,
+),
 cte_disbursal_latest AS (
     SELECT
         loanapplicationid,
@@ -67,7 +63,7 @@ cte_status_history_deduped AS (
         WHERE isapplicationaccepted = 1  and isactive=1
     ) ranked_status
     WHERE rn = 1
-), final as (
+)
 SELECT
     CAST(da.loanapplicationid AS BIGINT) AS loan_application_id,
     da.total_tranches AS total_tranches,
@@ -92,6 +88,3 @@ LEFT JOIN cte_pd_deduped pd
     ON pd.loanapplicationid = da.loanapplicationid
 LEFT JOIN cte_status_history_deduped sh
     ON sh.loanapplicationid = da.loanapplicationid
-    )
-
-SELECT count(*) from  final
