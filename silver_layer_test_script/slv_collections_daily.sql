@@ -1,4 +1,9 @@
 -- slv_collections_daily
+
+CREATE TABLE silver.slv_collections_daily
+DISTKEY(loan_due_status_id)
+SORTKEY(loan_application_id, loan_due_status_id)
+AS
 WITH cte_receipt_agg AS (
     SELECT
         loanapplicationid,
@@ -8,11 +13,8 @@ WITH cte_receipt_agg AS (
         COALESCE(SUM(CAST(emidueamount   AS DECIMAL(18, 2))), 0.00)  AS emi_due_sum
     FROM dmihfclos.tbldraftmanualreceipt
     WHERE isactive = 1
-    GROUP BY
-        loanapplicationid,
-        dateofcollection
+    GROUP BY loanapplicationid, dateofcollection
 ),
--- 8754
  cte_presentation_agg AS (
     SELECT
         loanapplicationid,
@@ -21,9 +23,7 @@ WITH cte_receipt_agg AS (
         COUNT(CASE WHEN bouncereasontypedetailid IS NOT NULL THEN 1 END) AS bounce_count
     FROM dmihfclos.tblloanapplicationpresentationdetail
     WHERE isactive = 1
-    GROUP BY
-        loanapplicationid,
-        presentationdate
+    GROUP BY loanapplicationid,  presentationdate
 ) ,
 cte_followup_latest AS (
     SELECT
@@ -33,16 +33,12 @@ cte_followup_latest AS (
         SELECT
             loanapplicationid,
             followuptypedetailid,
-            ROW_NUMBER() OVER (
-                PARTITION BY loanapplicationid
-                ORDER BY followupdate DESC
-            ) AS rn
+            ROW_NUMBER() OVER ( PARTITION BY loanapplicationid  ORDER BY followupdate DESC) AS rn
         FROM dmihfclos.tblcollectionfollowup
-        WHERE isactive      = 1
-          AND islastrecord  = 1
+        WHERE isactive      = 1  AND islastrecord  = 1
     ) ranked_followup
     WHERE rn = 1
-), final as (
+)
 SELECT
     CAST(lds.loanduestatusid   AS BIGINT) AS loan_due_status_id,
     CAST(lds.loanapplicationid AS BIGINT) AS loan_application_id,
@@ -60,12 +56,11 @@ SELECT
     CAST(lds.maxdeliquencyday  AS INT) AS max_dpd,
     lds.deliquencybktdetailid  AS dpd_bucket,
     CAST(COALESCE(CAST(lds.isnpa AS INT), 0) AS BOOLEAN) AS is_npa,
-
     COALESCE(CAST(ra.receipt_count AS INT), CAST(0 AS INT)) AS daily_receipt_count,
     COALESCE(CAST(ra.receipt_amount AS DECIMAL(18, 2)), CAST(0 AS DECIMAL(18, 2))) AS daily_receipt_amount,
-    -- COALESCE(CAST(pa.presentation_count  AS INT), CAST(0 AS INT)) AS daily_presentations,
-    -- COALESCE(CAST(pa.bounce_count        AS INT), CAST(0 AS INT)) AS daily_bounces,
-    -- cf.followuptypedetailid AS followup_type,
+    COALESCE(CAST(pa.presentation_count  AS INT), CAST(0 AS INT)) AS daily_presentations,
+    COALESCE(CAST(pa.bounce_count        AS INT), CAST(0 AS INT)) AS daily_bounces,
+    cf.followuptypedetailid AS followup_type,
     TRIM(lds.sourcefundingname) AS source_funding_name,
     CAST(lds.createdon AS TIMESTAMP) AS record_created_at,
     CAST(lds.lastmodifiedon AS TIMESTAMP) AS record_modified_a,
@@ -81,4 +76,3 @@ LEFT JOIN cte_presentation_agg pa
 LEFT JOIN cte_followup_latest cf
     ON  cf.loanapplicationid = lds.loanapplicationid
 WHERE lds.isactive = 1
--- 37658
