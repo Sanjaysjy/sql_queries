@@ -40,6 +40,8 @@ manual_receipt AS (
         WHERE isactive = 1
     ) t
     WHERE rn = 1
+
+--     needs confirmation on this logic
     -- select
     --     loanapplicationid,
     --     unadjustmentamount,
