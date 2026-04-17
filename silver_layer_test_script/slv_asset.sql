@@ -1,3 +1,9 @@
+-- slv_asset
+CREATE TABLE silver.slv_asset
+DISTKEY(loan_application_id)
+SORTKEY(property_detail_id, loan_application_id)
+AS
+
 WITH dedup_valuation AS (
     SELECT *,
            ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) rn
