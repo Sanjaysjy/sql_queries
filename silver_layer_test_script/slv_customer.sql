@@ -54,7 +54,8 @@ addr_cur AS (
         cityName,
         zip,
         landmark,
-        stateID,
+        blocktaluka ,
+        stayinginyears ,
         addressTypeDetailID,
         residenceTypeTypeDetailID,
         ROW_NUMBER() OVER (PARTITION BY entityID ORDER BY lastModifiedOn DESC) AS rn
@@ -69,6 +70,7 @@ occ_det AS (
         profileSegmentTypeDetailID,
         subProfileTypeDetailID,
         companyName,
+        retirementage ,
         industryTypeDetailID,
         subIndustryTypeDetailID,
         constitutionTypeDetailID,
@@ -199,6 +201,7 @@ oblig_agg AS (
         SUM(emiAmount) AS total_existing_emi,
         COUNT(existingObligationID) AS existing_obligation_count,
         SUM(loanAmount) AS total_existing_loan_amt
+        -- repaymentbanktypedetailid
     FROM dmihfclos.tblApplicantExistingObligation
     WHERE isActive = 1
     GROUP BY applicantID, loanApplicationID
@@ -250,7 +253,7 @@ SELECT
     kyc_aadh.refUID AS aadhaar_token,
     kyc_voter.identificationNumber AS voter_id,
     kyc_pass.identificationNumber AS passport_number,
-    kyc_dl.identificationNumber AS driving_license_number,                                                                                                             AS driving_license_masked,
+    kyc_dl.identificationNumber AS driving_license_number,
     td_kyc_stat.typeDetailDescription AS kyc_status,
     ac.cityName AS current_city,
     aab.currentStateID AS current_state,
@@ -272,12 +275,12 @@ SELECT
     inc.assessedMonthlyIncome AS assessed_income,
     CAST(occ.dateOfIncorporation AS DATE) AS dincorporation_joining_date,
     occ.retirementAge AS  retirement_age,
-    abb.officeAddress AS  business_office_address,
+    aab.officeAddress AS  business_office_address,
     td_emp_type.typeDetailDescription AS employment_type,
     td_sector.typeDetailDescription AS sector_constitution,
     -- udyam_reg_no
     -- udyam_reg_date
-    occ.designation AS designation,                                                                                                                                           AS designation,
+    occ.designation AS designation,
     occ.gstRegistration AS gst_vat,
     CAST(bur.score AS INT) AS cibil_score,
     asc_r.underwritingScore AS a_score,
@@ -293,7 +296,7 @@ SELECT
     abd.bankNameTypeDetailID AS bank_name,
     abd.accountTypeDetailID AS account_type,
     abd.salaryCreditTypeDetailID AS salary_credited,
-    oblig.repaymentBankTypeDetailID AS dmi_repayment_bank,
+    -- oblig.repaymentBankTypeDetailID AS dmi_repayment_bank,
     abd.isAbnormalTransaction AS abnormal_transaction_nontracable,
 
 --     NOT MENTIONED ABOUT  6 months  sum or sount of salary credits
@@ -318,16 +321,16 @@ LEFT JOIN inc_det inc
 left join dmihfclos.tblCustomerSegmentationModel csm
     ON  csm.applicantID       = ba.applicantID
     AND csm.loanApplicationID = ba.loanApplicationID
-    AND isactive =1
+    AND csm.isactive =1
 left join dmihfclos.tblLoanApplicationAdditionalBureau aab
     ON  aab.loanApplicationID = ba.loanApplicationID
-    AND isactive =1
+    AND aab.isactive =1
 left join dmihfclos.tblLoanBTSummary lbt
     ON  lbt.loanApplicationID = ba.loanApplicationID
-    AND isactive =1
+    AND lbt.isactive =1
 left join dmihfclos.tblApplicantBankDetails abd
     ON  abd.loanApplicationID = ba.loanApplicationID
-    AND isactive =1
+    AND abd.isactive =1
 
 
 LEFT JOIN kyc_pan
