@@ -1,11 +1,8 @@
 --  slv_repayment_behavior
-
 CREATE TABLE silver.slv_repayment_behavior
 DISTKEY(loan_application_id)
 SORTKEY(pay_schedule_id)
 AS
-
-
 
 WITH ps_dedup AS (
     SELECT

@@ -1,4 +1,8 @@
 -- slv_channel_partner
+CREATE TABLE silver.slv_channel_partner
+DISTKEY(dsa_id)
+SORTKEY(dsa_id)
+AS
 WITH CombinedData AS (
     SELECT
         dsa.dsaID AS dsa_id,

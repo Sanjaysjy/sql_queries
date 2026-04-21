@@ -1,7 +1,9 @@
+-- slv_employee
 CREATE TABLE silver.slv_employee
 DISTKEY(employee_id)
 SORTKEY(employee_id)
 AS
+
 WITH emp_dedup AS (
     SELECT
         employeeid,

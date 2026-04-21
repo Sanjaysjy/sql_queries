@@ -1,9 +1,9 @@
 -- slv_collections_daily
-
 CREATE TABLE silver.slv_collections_daily
 DISTKEY(loan_due_status_id)
 SORTKEY(loan_application_id, loan_due_status_id)
 AS
+
 WITH cte_receipt_agg AS (
     SELECT
         loanapplicationid,

@@ -1,9 +1,9 @@
 -- -- slv_loan_details
--- CREATE TABLE silver.slv_loan_details
--- DISTSTYLE KEY
--- DISTKEY (loan_application_id)
--- SORTKEY (loan_application_id)
--- AS
+CREATE TABLE silver.slv_loan_details
+DISTSTYLE KEY
+DISTKEY (loan_application_id)
+SORTKEY (loan_application_id)
+AS
 
 WITH LoanApplicationDetails AS (
     SELECT

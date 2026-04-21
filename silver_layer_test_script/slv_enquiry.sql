@@ -1,3 +1,9 @@
+-- slv_enquiry
+CREATE TABLE silver.slv_enquiry
+DISTKEY(lead_id)
+SORTKEY(lead_id)
+AS
+
 WITH LeadFollowUpAggregations AS (
     SELECT
         leadId,

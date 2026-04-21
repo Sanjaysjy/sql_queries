@@ -3,6 +3,7 @@ CREATE TABLE silver.slv_contract_perf_monthly
 DISTKEY(loan_application_id)
 SORTKEY(loan_application_id)
 AS
+
   SELECT
     lm.loanMonthlyID AS loan_monthly_id,
     lm.loanApplicationID AS loan_application_id,

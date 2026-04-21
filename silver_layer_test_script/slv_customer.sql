@@ -1,10 +1,10 @@
 -- slv_customer
 
--- CREATE TABLE silver.slv_customer
--- DISTSTYLE KEY
--- DISTKEY(applicant_id)
--- SORTKEY(loan_application_id)
--- AS
+CREATE TABLE silver.slv_customer
+DISTSTYLE KEY
+DISTKEY(applicant_id)
+SORTKEY(loan_application_id)
+AS
 
 WITH base_appl AS (
     SELECT

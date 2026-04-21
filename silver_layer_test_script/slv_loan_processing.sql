@@ -3,6 +3,7 @@ CREATE TABLE silver.slv_loan_processing
 DISTKEY (loan_application_id)
 SORTKEY (loan_application_id)
 AS
+
 WITH cte_disbursal_agg AS (
     SELECT
         loanapplicationid,
