@@ -28,7 +28,7 @@ latest_perf AS (
     SELECT
         loan_application_id,
         pos,
-        dpd,
+        max_dpd as dpd,
         is_npa,
         ROW_NUMBER() OVER (  PARTITION BY loan_application_id  ORDER BY snapshot_date DESC ) AS rn
     FROM silver.slv_contract_perf_monthly
@@ -103,8 +103,8 @@ SELECT
     UPPER(TRIM(b.branchcity)) AS branch_city,
     UPPER(TRIM(b.statename)) AS state_name,
     TRIM(b.branchaddress) AS branch_address,
-    CAST(b.latitude AS DECIMAL(12,8)) AS latitude,
-    CAST(b.longitude AS DECIMAL(12,8)) AS longitude,
+    CAST(NULLIF(TRIM(b.latitude), '') AS DECIMAL(12,8)) AS latitude,
+    CAST(NULLIF(TRIM(b.longitude), '') AS DECIMAL(12,8)) AS longitude,
     UPPER(TRIM(b.gstin)) AS gstin,
     -- Hierarchy
     CAST(b.regionid AS INT) AS region_id,
