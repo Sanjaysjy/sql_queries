@@ -356,11 +356,9 @@ ad.silver_batch_id,
 -- EMPLOYEE
 -- CAST(NULL AS BIGINT) AS sales_officer_emp_id,
 -- CAST(NULL AS BIGINT) AS credit_officer_emp_id,
--- CAST(NULL AS VARCHAR) AS sales_officer_emp_Name_Code,
 -- CAST(NULL AS VARCHAR) AS credit_officer_emp_Name_Code,
 
--- Additional Detail
-lad.sales_officer_name_code,
+lad.sales_officer_name_code  AS sales_officer_emp_Name_Code,
 lad.sales_officer_designation
 
 FROM LoanApplicationSummary ls
