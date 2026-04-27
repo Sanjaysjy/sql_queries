@@ -1,5 +1,3 @@
-
-
 WITH
 reschedule_latest AS (
     SELECT

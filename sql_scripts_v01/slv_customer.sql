@@ -39,9 +39,9 @@ WITH base_appl AS (
         createdOn,
         lastModifiedOn,
         noOfPropertyOwned,
-        incomeConsidered ,     /* additional fields */
-        nameAsPerAadhar,   /* additional fields */
-        riskTypeDetailID,  /* additional fields */
+        incomeConsidered ,                 ---added       /* additional fields */
+        nameAsPerAadhar,                   ---added     /* additional fields */
+        riskTypeDetailID,                 ---added    /* additional fields */
         (
             SELECT ar.riskTypeDetailID
             FROM dmihfclos.tblApplicantRisk ar
@@ -49,7 +49,7 @@ WITH base_appl AS (
             AND ar.isActive = 1
             ORDER BY ar.reEvaluatedOn DESC
             LIMIT 1
-        ) AS current_riskTypeDetailID , /* additional fields : left join on table tblApplicantRisk  based on applicantID where isActive = 1 having max reEvaluatedOn */
+        ) AS current_riskTypeDetailID ,                 ---added     /* additional fields : left join on table tblApplicantRisk  based on applicantID where isActive = 1 having max reEvaluatedOn */
         ROW_NUMBER() OVER (PARTITION BY applicantID ORDER BY lastModifiedOn DESC) AS rn
     FROM dmihfclos.tblApplicant a
 ),
@@ -90,13 +90,13 @@ occ_det AS (
         designation,
         gstRegistration,
         dateOfIncorporation,
-        dateOfJoining ,       /* added  field */
-        totalExperience ,     /* added  field */
-        businessVinatgeInYear,  /* added  field */
-        businessSetupTypeDetailID,  /* added  field */
-        isPensioner,     /* added  field */
-        isSalarySlipAvailable,   /* added  field */
-        isMultipleEarner,  /* added  field */
+        dateOfJoining ,                   ---added    /* added  field */
+        totalExperience ,                 ---added     /* added  field */
+        businessVinatgeInYear,            ---added     /* added  field */
+        businessSetupTypeDetailID         ---added      /* added  field */
+        isPensioner,                      ---added    /* added  field */
+        isSalarySlipAvailable,            ---added    /* added  field */
+        isMultipleEarner,                 ---added     /* added  field */
         ROW_NUMBER() OVER (PARTITION BY applicantID, loanApplicationID ORDER BY lastModifiedOn DESC) AS rn
     FROM dmihfclos.tblApplicantOccupationalDetail
     WHERE isActive = 1
