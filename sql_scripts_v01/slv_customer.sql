@@ -57,9 +57,9 @@ current_risk  AS (
     SELECT
         ba.applicantID,
         ba.loanApplicationID,
-        COALESCE(ba.current_riskTypeDetailID, ba.riskTypeDetailID) AS current_riskTypeDetailID
+        COALESCE(ba.current_riskTypeDetailID, ba.riskTypeDetailID) AS current_riskTypeDetailID,
+        ROW_NUMBER() OVER (PARTITION BY ba.applicantID ORDER BY ba.lastModifiedOn DESC) AS rn
     FROM base_appl ba
-    WHERE ba.rn = 1
         )
 
 ,addr_cur AS (
@@ -358,7 +358,7 @@ SELECT
 
 --     NOT MENTIONED ABOUT  6 months  sum or count of salary credits
     --salaryCreditCountLastSixMonth AS salary_credited_last_6months  FROM THIS TABLE tblCartCamAnalysisData          --pk or relation with the base table ?
-    td_risk.typeDetailDescription AS risk_category,
+--     td_risk.typeDetailDescription AS risk_category,
     CAST(ba.createdOn AS TIMESTAMP) AS record_created_at,
     CAST(ba.lastModifiedOn AS TIMESTAMP) AS record_modified_at,
     CURRENT_TIMESTAMP AS silver_loaded_at,
@@ -391,6 +391,11 @@ left join dmihfclos.tblApplicantBankDetails abd
 LEFT JOIN dmihfclos.tblEmploymentUdhyamDetails ud
     ON  ud.applicantID = ba.applicantID
     AND ud.isactive =1
+
+LEFT JOIN current_risk cr
+    ON  cr.applicantID       = ba.applicantID
+    AND cr.loanApplicationID = ba.loanApplicationID
+    AND cr.rn = 1
 
 LEFT JOIN kyc_pan
     ON  kyc_pan.applicantID       = ba.applicantID
@@ -468,6 +473,6 @@ LEFT JOIN dmihfclos.tblTypeDetail td_emp_type
 LEFT JOIN dmihfclos.tblTypeDetail td_sector
     ON  td_sector.typeDetailID = occ.sectorTypeDetailID
 LEFT JOIN dmihfclos.tblTypeDetail td_risk
-    ON  td_risk.typeDetailID = ba.current_riskTypeDetailID
+    ON  td_risk.typeDetailID = cr.current_riskTypeDetailID
 
 WHERE ba.rn = 1;
