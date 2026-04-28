@@ -102,7 +102,11 @@ LoanApplicationDetails AS (
 
         lad.disbursedAmountTillDate AS total_disbursed_amount,                       --- added     /* tblLoanApplicationAdditionalDetail : disburdisbursedAmountTillDate  */
         lad.bookedAmountTillDate AS total_booked_amount,                             --- added     /* tblLoanApplicationAdditionalDetail : bookedAmountTillDate  */
-        lad.totalInsuranceAmount AS total_insurance_amount,   
+        lad.totalInsuranceAmount AS total_insurance_amount,
+        lad.firstbookeddate  AS first_booked_date,
+        lad.lastbookeddate  AS last_booked_date,
+        lad.firstbookedamount  AS first_booked_amount,
+        lad.isfullybooked AS is_fully_booked,
         ds.documentValue AS document_value,
         la.tenure AS requested_tenure_months,
         la.sanctionedTenure AS sanctioned_tenure_months,
@@ -111,15 +115,16 @@ LoanApplicationDetails AS (
         la.sanctionedEMI AS sanctioned_emi,
         COALESCE(pm.current_emi, lad.currentEMI) AS current_emi,                    --- added     /*tblLoanApplicationPaySchedule dueamount of current month dueDate */
         ds.emiCycle AS emi_cycle_day,
+        ds.hypothecation AS hypothecation_detail,
         COALESCE(TRIM(la.finalStatus),'NULL') AS final_status,                   --- added     /* this is null field */
-
+        curr_status.typeDetailDisplayText AS statustypedetailid,
         CAST(ds.moratoriumMonths AS INTEGER) AS moratorium_months,                   --- added    /* tblLoanApplicationDisbursalDetail  , momoratoriumMonths */
         TRIM(ds.fundingSouce) AS funding_source,
         lad.inorganicType  AS inorganic_type,
 
         --  ROI
         COALESCE(rl.aroi, rs.final_roi_pct) AS current_roi_pct,            ---  added   /* table tblApplicationDisbursalReschedulement select   max(disbursalReschedulementID)  corresponding aROI. If null/blank then refer table tblLoanApplicationROISpread where isActive = 1 column : finalROI */
-        rl.paydueday AS current_emi_cycle_day                                       ---  added   /* additional column ,table tblApplicationDisbursalReschedulement last active record of the loan  field , payDueDay*/
+        rl.paydueday AS current_emi_cycle_day                       --  current_due_day                ---  added   /* additional column ,table tblApplicationDisbursalReschedulement last active record of the loan  field , payDueDay*/
 
     FROM dmihfclos.tblLoanApplication la
 
@@ -144,6 +149,9 @@ LoanApplicationDetails AS (
 --     LEFT JOIN dmihfclos.tblLoanApplicationStatusHistory lsh
 --         ON la.loanApplicationID = lsh.loanApplicationID
 --         AND lsh.isActive = 1
+    LEFT JOIN dmihfclos.tblTypeDetail curr_status
+        ON la.statustypedetailid = ts.typeDetailID
+        AND ts.isActive = 1  /*  inner join */
 
     LEFT JOIN dmihfclos.tblTypeDetail ts
         ON la.loanSchemeTypeDetailID = ts.typeDetailID
@@ -270,7 +278,7 @@ LinkedLoans AS (
         loanApplicationID AS loan_application_id,
         CASE WHEN COUNT(*) > 0 THEN TRUE ELSE FALSE END AS is_link_loan,
         COUNT(linkedLoanApplicationID) AS linked_loan_count,
-        MAX(isSameProperty) AS is_same_property_link,
+--         MAX(isSameProperty) AS is_same_property_link,   -- removed AD.
         LISTAGG(linkedLoanApplicationID, ',')
         WITHIN GROUP (ORDER BY linkedLoanApplicationID) AS linked_loans
     FROM dmihfclos.tblLoanApplicationLinking
@@ -281,10 +289,21 @@ LinkedLoans AS (
 tvr_Details AS (
     SELECT
         tvr.loanApplicationID AS loan_application_id,
+        -- 1. Main flag (any value except 0 → TRUE)
         CASE
-            WHEN MAX(tvr.tvrChecklistID) IS NOT NULL THEN TRUE
+            WHEN MAX(tvr.tvrChecklistID) = 0 OR MAX(tvr.tvrChecklistID) IS NULL THEN FALSE
+            ELSE TRUE
+        END AS tvr_overall_flag,
+        -- 2. Specific flag when value = 4
+        CASE
+            WHEN MAX(tvr.tvrChecklistID) = 4 THEN TRUE
             ELSE FALSE
-        END AS tvr_bribe_flag
+        END AS tvr_flag_4,
+        -- 3. Bribe/commission question flag (value = 3)  Has anyone asked for commission or bribe from customer to get the loan sanction from DMI HFC?
+        CASE
+            WHEN MAX(tvr.tvrChecklistID) = 3 THEN 'Bribe'
+            ELSE NULL
+        END AS tvr_flag_3bribe
     FROM dmihfclos.tblLoanApplicationTvrChecklist tvr
     WHERE isActive = 1
     GROUP BY tvr.loanApplicationID   /*to discuss */
@@ -366,7 +385,11 @@ ls.category,
 ls.moratorium_months,
 ls.current_emi_cycle_day,
 ls.login_acceptance_date,
-
+ls.first_booked_date,
+ls.last_booked_date,
+ls.first_booked_amount,
+ls.is_fully_booked,
+ls.hypothecation_detail,
 -- ROI
 rs.base_rate_pct,
 rs.plr_spread_pct,
@@ -409,11 +432,13 @@ sc.zone_name,
 -- Linked loans
 ll.is_link_loan,
 ll.linked_loan_count,
-ll.is_same_property_link,
+-- ll.is_same_property_link,
 ll.linked_loans,
 
 -- TVR
-tvr.tvr_bribe_flag,
+tvr.tvr_overall_flag,
+tvr.tvr_flag_4,
+tvr.tvr_flag_3bribe,
 
 -- AUDIT
 ad.record_created_at,

@@ -53,8 +53,16 @@ WITH base_appl AS (
         ROW_NUMBER() OVER (PARTITION BY applicantID ORDER BY lastModifiedOn DESC) AS rn
     FROM dmihfclos.tblApplicant a
 ),
+current_risk  AS (
+    SELECT
+        ba.applicantID,
+        ba.loanApplicationID,
+        COALESCE(ba.current_riskTypeDetailID, ba.riskTypeDetailID) AS current_riskTypeDetailID
+    FROM base_appl ba
+    WHERE ba.rn = 1
+        )
 
-addr_cur AS (
+,addr_cur AS (
     SELECT
         address1,    ---added /*  added address */
         cityID,      --- added /*  added city */
@@ -93,7 +101,7 @@ occ_det AS (
         dateOfJoining ,                   ---added    /* added  field */
         totalExperience ,                 ---added     /* added  field */
         businessVinatgeInYear,            ---added     /* added  field */
-        businessSetupTypeDetailID         ---added      /* added  field */
+        businessSetupTypeDetailID,         ---added      /* added  field */
         isPensioner,                      ---added    /* added  field */
         isSalarySlipAvailable,            ---added    /* added  field */
         isMultipleEarner,                 ---added     /* added  field */
@@ -118,10 +126,13 @@ kyc_pan AS (
         applicantID,
         loanApplicationID,
         identificationNumber,
-        ROW_NUMBER() OVER (PARTITION BY applicantID, loanApplicationID ORDER BY lastModifiedOn DESC) AS rn
-    FROM dmihfclos.tblApplicantKyc
-    WHERE isActive = 1
-      AND identificationTypeDetailID = 56
+        stats.typeDetailDescription  as pan_kyc_verified_status,
+        ROW_NUMBER() OVER (PARTITION BY ba.applicantID, ba.loanApplicationID ORDER BY ba.lastModifiedOn DESC) AS rn
+    FROM dmihfclos.tblApplicantKyc ba
+    LEFT JOIN dmihfclos.tblTypeDetail stats
+    ON   stats.typedetailid = ba.verifiedstatustypedetailid
+    and ba.isActive = 1
+      where ba.identificationTypeDetailID =  56
 ),
 
 kyc_aadh AS (
@@ -130,10 +141,13 @@ kyc_aadh AS (
         loanApplicationID,
         refUID,
         uidLastDigit ,   /* added  field */
-        ROW_NUMBER() OVER (PARTITION BY applicantID, loanApplicationID ORDER BY lastModifiedOn DESC) AS rn
-    FROM dmihfclos.tblApplicantKyc
-    WHERE isActive = 1
-      AND identificationTypeDetailID = 230
+        stats.typeDetailDescription  as aadh_kyc_verified_status,
+        ROW_NUMBER() OVER (PARTITION BY ba.applicantID, ba.loanApplicationID ORDER BY ba.lastModifiedOn DESC) AS rn
+    FROM dmihfclos.tblApplicantKyc ba
+    LEFT JOIN dmihfclos.tblTypeDetail stats
+    ON   stats.typedetailid = ba.verifiedstatustypedetailid
+    and ba.isActive = 1
+      where ba.identificationTypeDetailID =  230
 ),
 
 kyc_voter AS (
@@ -141,10 +155,13 @@ kyc_voter AS (
         applicantID,
         loanApplicationID,
         identificationNumber,
-        ROW_NUMBER() OVER (PARTITION BY applicantID, loanApplicationID ORDER BY lastModifiedOn DESC) AS rn
-    FROM dmihfclos.tblApplicantKyc
-    WHERE isActive = 1
-      AND identificationTypeDetailID = 233
+        stats.typeDetailDescription  as voter_kyc_verified_status,
+        ROW_NUMBER() OVER (PARTITION BY ba.applicantID, ba.loanApplicationID ORDER BY ba.lastModifiedOn DESC) AS rn
+    FROM dmihfclos.tblApplicantKyc ba
+    LEFT JOIN dmihfclos.tblTypeDetail stats
+    ON   stats.typedetailid = ba.verifiedstatustypedetailid
+    and ba.isActive = 1
+      where ba.identificationTypeDetailID =  233
 ),
 
 kyc_pass AS (
@@ -152,10 +169,13 @@ kyc_pass AS (
         applicantID,
         loanApplicationID,
         identificationNumber,
-        ROW_NUMBER() OVER (PARTITION BY applicantID, loanApplicationID ORDER BY lastModifiedOn DESC) AS rn
-    FROM dmihfclos.tblApplicantKyc
-    WHERE isActive = 1
-      AND identificationTypeDetailID = 231
+        stats.typeDetailDescription  as pass_kyc_verified_status,
+        ROW_NUMBER() OVER (PARTITION BY ba.applicantID, ba.loanApplicationID ORDER BY ba.lastModifiedOn DESC) AS rn
+    FROM dmihfclos.tblApplicantKyc ba
+    LEFT JOIN dmihfclos.tblTypeDetail stats
+    ON   stats.typedetailid = ba.verifiedstatustypedetailid
+    and ba.isActive = 1
+      where ba.identificationTypeDetailID =  231
 ),
 
 kyc_dl AS (
@@ -163,10 +183,13 @@ kyc_dl AS (
         applicantID,
         loanApplicationID,
         identificationNumber,
-        ROW_NUMBER() OVER (PARTITION BY applicantID, loanApplicationID ORDER BY lastModifiedOn DESC) AS rn
-    FROM dmihfclos.tblApplicantKyc
-    WHERE isActive = 1
-      AND identificationTypeDetailID = 232
+        stats.typeDetailDescription  as dl_kyc_verified_status,
+        ROW_NUMBER() OVER (PARTITION BY ba.applicantID, ba.loanApplicationID ORDER BY ba.lastModifiedOn DESC) AS rn
+    FROM dmihfclos.tblApplicantKyc ba
+    LEFT JOIN dmihfclos.tblTypeDetail stats
+    ON   stats.typedetailid = ba.verifiedstatustypedetailid
+    and ba.isActive = 1
+      where ba.identificationTypeDetailID =  232
 ),
 
 kyc_stat AS (
@@ -178,16 +201,6 @@ kyc_stat AS (
     FROM dmihfclos.tblApplicantKyc
     WHERE isActive = 1
       AND isUseForPerformKyc = 1   /* to discuss */
-),
-
-risk_rec AS (
-    SELECT
-        applicantID,
-        loanApplicationID,
-        riskTypeDetailID,
-        ROW_NUMBER() OVER (PARTITION BY applicantID, loanApplicationID ORDER BY lastModifiedOn DESC) AS rn
-    FROM dmihfclos.tblApplicantRisk
-    WHERE isActive = 1   /* to discuss */
 ),
 
 bur_cibil AS (
@@ -264,7 +277,7 @@ SELECT
     CASE WHEN ba.isExServicemen = 1 THEN TRUE WHEN ba.isExServicemen = 0 THEN FALSE ELSE NULL END AS is_exservicemen,
     CASE WHEN ba.isManualScavenger = 1 THEN TRUE WHEN ba.isManualScavenger = 0 THEN FALSE ELSE NULL END AS is_manualscavenger,
     CASE WHEN ba.isHomeMakerTypeDetailID IS NOT NULL THEN TRUE ELSE FALSE END AS is_homemaker,
-    ba.current_riskTypeDetailID,
+    td_risk.typeDetailDescription  AS current_risk,   --- added
     ba.incomeConsidered AS income_considered,
     ba.nameAsPerAadhar AS name_as_per_aadhar,
     ba.riskTypeDetailID AS risk_TypeDetailID,
@@ -277,11 +290,16 @@ SELECT
     ba.noOfPropertyOwned  AS no_of_propertyowned,
     csm.custSegment  AS customer_segment,
     kyc_pan.identificationNumber AS pan_number,
+    kyc_pan.pan_kyc_verified_status,
     kyc_aadh.refUID AS aadhaar_token,
+    kyc_aadh.aadh_kyc_verified_status,
     kyc_aadh.uidLastDigit  as uid_last_digit,
     kyc_voter.identificationNumber AS voter_id,
+    kyc_voter.voter_kyc_verified_status,
     kyc_pass.identificationNumber AS passport_number,
+    kyc_pass.pass_kyc_verified_status,
     kyc_dl.identificationNumber AS driving_license_number,
+    kyc_dl.dl_kyc_verified_status,
     td_kyc_stat.typeDetailDescription AS kyc_status,
     ac.cityName AS current_city,
     aab.currentStateID AS current_state,
@@ -325,21 +343,21 @@ SELECT
     asc_r.creditBucket  as credit_bucket,
     aab.experianScore AS experian_score,
     -- highmark_result_score
-    oblig.total_existing_emi AS total_existing_emi,      /*Multiple */
-    oblig.existing_obligation_count AS existing_obligation_count,  /*Multiple */
-    oblig.total_existing_loan_amt AS total_existing_loan_amt,  /*Multiple */
+    -- oblig.total_existing_emi AS total_existing_emi,      /*Multiple */
+    -- oblig.existing_obligation_count AS existing_obligation_count,  /*Multiple */
+    -- oblig.total_existing_loan_amt AS total_existing_loan_amt,  /*Multiple */
     lbt.btLoanAmount AS  bt_loan_amount,
     -- bt_loan_financer    /*  to discuss  Multiple */
     -- cash_deposit_sync_business -- source table not present
 
-    abd.bankNameTypeDetailID AS bank_name,        /*Multiple */
-    abd.accountTypeDetailID AS account_type,        /*Multiple */
-    abd.salaryCreditTypeDetailID AS salary_credited,     /*Multiple */
+    -- abd.bankNameTypeDetailID AS bank_name,        /*Multiple */
+    -- abd.accountTypeDetailID AS account_type,        /*Multiple */
+    -- abd.salaryCreditTypeDetailID AS salary_credited,     /*Multiple */
     -- oblig.repaymentBankTypeDetailID AS dmi_repayment_bank,
-    abd.isAbnormalTransaction AS abnormal_transaction_nontracable,    /*Multiple */
+    -- abd.isAbnormalTransaction AS abnormal_transaction_nontracable,    /*Multiple */
 
 --     NOT MENTIONED ABOUT  6 months  sum or count of salary credits
-    --salaryCreditCountLastSixMonth AS salary_credited_last_6months  FROM THIS TABLE tblCartCamAnalysisData
+    --salaryCreditCountLastSixMonth AS salary_credited_last_6months  FROM THIS TABLE tblCartCamAnalysisData          --pk or relation with the base table ?
     td_risk.typeDetailDescription AS risk_category,
     CAST(ba.createdOn AS TIMESTAMP) AS record_created_at,
     CAST(ba.lastModifiedOn AS TIMESTAMP) AS record_modified_at,
@@ -398,10 +416,6 @@ LEFT JOIN kyc_stat
     ON  kyc_stat.applicantID       = ba.applicantID
     AND kyc_stat.loanApplicationID = ba.loanApplicationID
     AND kyc_stat.rn = 1
-LEFT JOIN risk_rec rr
-    ON  rr.applicantID       = ba.applicantID
-    AND rr.loanApplicationID = ba.loanApplicationID
-    AND rr.rn = 1
 LEFT JOIN bur_cibil bur
     ON  bur.entityID          = ba.entityID
     AND bur.loanApplicationID = ba.loanApplicationID
