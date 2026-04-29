@@ -19,22 +19,41 @@ loan_agg AS (
     FROM silver.slv_loan_details
     GROUP BY branch_id    /*to Discuss - Branch change */
 ),
--- Latest Performance Snapshot
+-- reconstructed using daily changing table -- Latest Performance Snapshot
 latest_perf AS (
-    SELECT
-        loan_application_id,
-        pos,
-        pos_after_sell,  /* column added */
-        max_dpd as dpd,    /* to discuss the usagew*/
-        is_npa,
-        ROW_NUMBER() OVER (  PARTITION BY loan_application_id  ORDER BY snapshot_date DESC ) AS rn
-    FROM silver.slv_contract_perf_monthly
+SELECT
+    ld.loanapplicationid AS loan_application_id,
+    ld.pos  as pos,
+    ld.pos * (
+                CASE
+                    -- WHEN ped.isLoanLevel = 1
+                    --     THEN COALESCE(peld.percentage, 100)
+
+                    WHEN ped.percentage = 0 OR ped.percentage IS NULL
+                        THEN COALESCE(peld.percentage, 100)
+
+                    ELSE ped.percentage
+                END / 100
+            ) AS pos_after_sell,            --- added  --    /* column added */  --- what is sellpos in tblloanduestatus ---
+    ld.maxdeliquencyday AS dpd,             --- added  --    /* to discuss the usage*/
+    ld.isnpa AS is_npa,
+    ROW_NUMBER() OVER (PARTITION BY ld.loanapplicationid  ORDER BY ld.lastmodifiedon DESC) AS rn
+
+FROM dmihfclos.tblloanduestatus ld
+
+LEFT JOIN dmihfclos.tblPortfolioPartnerEngagementLoanDetails peld
+    ON ld.loanapplicationid = peld.loanApplicationID
+    AND peld.isActive = 1
+
+LEFT JOIN dmihfclos.tblPortfolioPartnerEngagementDetail ped
+    ON peld.engagementID = ped.engagementID
+    AND ped.isActive = 1
 ),
 perf_with_branch AS (
     SELECT
         ld.branch_id,
         lp.pos,
-        pos_after_sell,  /* column added */
+        lp.pos_after_sell,  /* column added */
         lp.dpd,
         lp.is_npa
     FROM latest_perf lp
@@ -111,7 +130,9 @@ SELECT
     CAST(r.zoneid AS INT) AS zone_id,
     TRIM(z.zonename) AS zone_name,
     CAST(b.branchinchargeemployeeid AS BIGINT) AS branch_incharge_emp_id,
-    TRIM(e.employeename) AS branch_incharge_name,  /* concat employee code */
+    TRIM(e.employeename) AS branch_incharge_name,
+    TRIM(e.employeename) || ' - ' || TRIM(e.employeecode) AS branch_incharge_name_and_code,             --- added      /* concat employee code */
+    trim(e.newemployeeid)  AS new_employee_id,
     -- Codes
     TRIM(b.navcode) AS nav_code,
     TRIM(b.cersaicode) AS cersai_code,
@@ -124,11 +145,12 @@ SELECT
     COALESCE(la.total_loans_originated, 0) AS total_loans_originated,
     COALESCE(pa.active_loan_count, 0) AS active_loan_count,
     COALESCE(pa.total_pos, 0) AS total_pos,
+    pa.total_pos_after_sell  as total_pos_after_sell,           --- added --
     COALESCE(pa.dpd_count, 0) AS dpd_count,
     COALESCE(pa.npa_count, 0) AS npa_count,
     CAST(ROUND(COALESCE(pa.npa_pos, 0) / NULLIF(pa.total_pos, 0) * 100, 2) AS DECIMAL(6,2)) AS gross_npa_pct,
 
-    -- 24. no proper join found for this formula o derive
+    -- 24. no proper join found for this formula to derive
 
     --     CASE
     --         WHEN COALESCE(rd.unsecuredamount,0) = 0
