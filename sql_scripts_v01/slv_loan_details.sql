@@ -88,12 +88,16 @@ LoanApplicationDetails AS (
         CASE WHEN la.isEmployeeLoan = '1' THEN TRUE ELSE FALSE END AS is_employee_loan,
         CAST(la.date AS DATE) AS application_date,
         CAST(lad.loginDate  as DATE) AS login_date,
+        lad.loginAmount  AS login_Amount,
+        cast(lad.firstSancationDate AS date) as first_Sancation_Date,
+
         COALESCE(acc.min_applicationaccepteddate,la.createdon) AS login_acceptance_date,
         la.firstSanctionDate AS first_sanction_date,
         la.lastSanctionDate AS last_sanction_date,
 
         lad.firstDisbursementDate AS first_disbursal_date,                         --- added   /* tblLoanApplicationAdditionalDetail : firstDisbursementDate  */
         lad.lastDisbursementDate AS last_disbursal_date,                           --- added  /* tblLoanApplicationAdditionalDetail : lastDisbursementDate */
+        lad.firstDisbursedAmount  AS first_Disbursed_Amount,
         ds.emiStartDate AS emi_start_date,
         ds.emiEndDate AS emi_end_date,
         la.loanAmountRequest AS requested_amount,
@@ -103,10 +107,39 @@ LoanApplicationDetails AS (
         lad.disbursedAmountTillDate AS total_disbursed_amount,                       --- added     /* tblLoanApplicationAdditionalDetail : disburdisbursedAmountTillDate  */
         lad.bookedAmountTillDate AS total_booked_amount,                             --- added     /* tblLoanApplicationAdditionalDetail : bookedAmountTillDate  */
         lad.totalInsuranceAmount AS total_insurance_amount,
+        lad.loanDownsizeDate  AS loan_Downsize_Date,
         lad.firstbookeddate  AS first_booked_date,
         lad.lastbookeddate  AS last_booked_date,
         lad.firstbookedamount  AS first_booked_amount,
         lad.isfullybooked AS is_fully_booked,
+        --additional fields from the table  tblLoanApplicationAdditionalDetail :
+        lad.loanAdditionalID  AS loan_additional_id,
+        lad.zoneID  AS zone_ID,
+        lad.regionID  AS region_ID,
+        lad.isActuallyFullyDisbursed  AS is_Actually_Fully_Disbursed,
+        lad.currentROI  AS current_ROI,
+        lad.currentTenor AS current_Tenure,
+        lad.balanceTenor  AS balance_Tenure,
+        lad.sanctionLTV AS sanction_LTV,
+        lad.taggedWith AS tagged_With,
+        lad.otcPending  AS otc_Pending,
+        lad.pddPending AS pdd_Pending,
+        lad.titleReasonTypeDetailID  AS titleReason_TypeDetailID,
+        lad.titleDeedReceiveDate  AS title_Deed_Receive_Date,
+        lad.pddStatusTypeDetailID AS pddStatus_TypeDetailID,
+        lad.otcStatusTypeDetailID  AS otcStatus_TypeDetailID,
+        lad.titleDeedStatusTypeDetailID  AS title_Deed_Status_TypeDetailID,
+        lad.pendingChequeHandoverCount AS pending_Cheque_Handover_Count,
+        lad.pendingChequeHandoverAmount AS pending_Cheque_Handover_Amount,
+        lad.isActive  AS is_Active,
+        lad.createdBy  AS created_By,
+        lad.lastModifiedBy  AS last_Modified_By,
+        lad.fraudDetectionDate  AS fraud_Detection_Date,
+        lad.fraudType  AS  fraud_Type,
+        lad.preferredLanguageTypeDetailID  AS preferred_Language_TypeDetailID,
+        lad.digitalTeamEmpID AS digital_Team_Emp_ID,
+
+
         ds.documentValue AS document_value,
         la.tenure AS requested_tenure_months,
         la.sanctionedTenure AS sanctioned_tenure_months,
@@ -328,7 +361,8 @@ LoanApplicationAdditionalDetail AS (
         lad.zoneName AS zone_name,
         lad.regionName AS region_name,
         lad.salesOfficerName AS sales_officer_name_code,
-        lad.salesOfficerDesignation AS sales_officer_designation
+        lad.salesOfficerDesignation AS sales_officer_designation,
+        lad.salesOfficerDesignationLevel  AS sales_Officer_Designation_Level
     FROM dmihfclos.tblLoanApplicationAdditionalDetail lad
     WHERE lad.isActive = 1
 )
@@ -390,6 +424,37 @@ ls.last_booked_date,
 ls.first_booked_amount,
 ls.is_fully_booked,
 ls.hypothecation_detail,
+--additional fields from the table  tblLoanApplicationAdditionalDetail :
+ls.loan_additional_id,
+ls.zone_ID,
+ls.region_ID,
+ls.login_Amount,
+ls.first_Sancation_Date,
+ls.first_Disbursed_Amount,
+ls.loan_Downsize_Date,
+ls.is_Actually_Fully_Disbursed,
+ls.current_ROI,
+ls.current_Tenur,
+ls.balance_Tenure,
+ls.sanction_LTV,
+ls.tagged_With,
+ls.otc_Pending,
+ls.pdd_Pending,
+ls.titleReason_TypeDetailID,
+ls.title_Deed_Receive_Date,
+ls.pddStatus_TypeDetailID,
+ls.otcStatus_TypeDetailID,
+ls.title_Deed_Status_TypeDetailID,
+ls.pending_Cheque_Handover_Count,
+ls.pending_Cheque_Handover_Amount,
+ls.is_Active,
+ls.created_By,
+ls.last_Modified_By,
+ls.fraud_Detection_Date,
+ls.fraud_Type,
+ls.preferred_Language_TypeDetailID,
+LS.digital_Team_Emp_ID,
+
 -- ROI
 rs.base_rate_pct,
 rs.plr_spread_pct,
@@ -452,7 +517,8 @@ ad.silver_batch_id,
 -- CAST(NULL AS VARCHAR) AS credit_officer_emp_Name_Code,
 
 lad.sales_officer_name_code  AS sales_officer_emp_Name_Code,
-lad.sales_officer_designation
+lad.sales_officer_designation ,
+lad.sales_Officer_Designation_Level
 
 FROM LoanApplicationSummary ls
 
