@@ -1,8 +1,8 @@
 -- slv_asset
-CREATE TABLE silver.slv_asset
-DISTKEY(loan_application_id)
-SORTKEY(property_detail_id, loan_application_id)
-AS
+-- CREATE TABLE silver.slv_asset
+-- DISTKEY(loan_application_id)
+-- SORTKEY(property_detail_id, loan_application_id)
+-- AS
 
 WITH dedup_valuation AS (
     SELECT *,
@@ -10,28 +10,18 @@ WITH dedup_valuation AS (
     FROM dmihfclos.tblloantechnicaldiligencevaluation
     WHERE isactive = 1
 ),
-
-dedup_report_imd AS (
-    SELECT *,
-           ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) rn
-    FROM dmihfclos.tblloantechnicalreportimd
-    WHERE isactive = 1
-),
-
-dedup_surrounding_imd AS (
-    SELECT *,
-           ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) rn
-    FROM dmihfclos.tblloantechnicalpropertysurroundingimd
-    WHERE isactive = 1
-),
-
 dedup_vetting AS (
     SELECT *,
            ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) rn
     FROM dmihfclos.tblloantechnicalreportvetting
     WHERE isactive = 1
 ),
-
+technical_report AS (
+    SELECT *,
+           ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) rn
+    FROM dmihfclos.tblLoanTechnicalReport
+    WHERE isactive = 1
+),
 dedup_legal AS (
     SELECT *,
            ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) rn
@@ -87,22 +77,24 @@ SELECT
         WHEN pd.isnegativearea = '0' THEN FALSE
     END AS is_negative_area,
 
+
+    --- added  the alternative table for imd tables
     CASE
-        WHEN TRIM(CAST(si.latitude AS VARCHAR(100))) ~ '^-?[0-9]+(\.[0-9]+)?$'
-        THEN CAST(TRIM(CAST(si.latitude AS VARCHAR(100))) AS DECIMAL(20,8))
+        WHEN TRIM(CAST(ps.latitude AS VARCHAR(100))) ~ '^-?[0-9]+(\.[0-9]+)?$'
+        THEN CAST(TRIM(CAST(ps.latitude AS VARCHAR(100))) AS DECIMAL(20,8))
     END AS latitude,
 
     CASE
-        WHEN TRIM(CAST(si.longitude AS VARCHAR(100))) ~ '^-?[0-9]+(\.[0-9]+)?$'
-        THEN CAST(TRIM(CAST(si.longitude AS VARCHAR(100))) AS DECIMAL(20,8))
+        WHEN TRIM(CAST(ps.longitude AS VARCHAR(100))) ~ '^-?[0-9]+(\.[0-9]+)?$'
+        THEN CAST(TRIM(CAST(ps.longitude AS VARCHAR(100))) AS DECIMAL(20,8))
     END AS longitude,
 
-    si.pacolonyprojectname AS tech_project_name,
-    si.pakhasrasurveyno  AS tech_khasra_no,
+    ps.pacolonyprojectname AS tech_project_name,
+    ps.pakhasrasurveyno  AS tech_khasra_survey_no,
 
     CASE
-        WHEN si.isitselfoccupiedpropertybyapplicanttypedetailid IS NULL THEN NULL
-        WHEN si.isitselfoccupiedpropertybyapplicanttypedetailid = '1' THEN TRUE
+        WHEN ps.isitselfoccupiedpropertybyapplicanttypedetailid IS NULL THEN NULL
+        WHEN ps.isitselfoccupiedpropertybyapplicanttypedetailid = '1' THEN TRUE
         ELSE FALSE
     END AS is_self_occupied,
 
@@ -164,7 +156,7 @@ SELECT
 
     CAST(tf.firingdate AS DATE)         AS tech_firing_date,
     CAST(tf.reportreceiveddate AS DATE) AS tech_report_received_date,
-    CAST(ri.propertyvisitdate AS DATE)  AS tech_visit_date,
+    CAST(tr.propertyvisitdate AS DATE)  AS tech_visit_date,  -- added  alternative column by excluding imd table field
 
     CAST(pd.createdon AS TIMESTAMP)      AS record_created_at,
     CAST(pd.lastmodifiedon AS TIMESTAMP) AS record_modified_at,
@@ -174,12 +166,11 @@ SELECT
 FROM dmihfclos.tblapplicationpropertydetail pd
 
 LEFT JOIN dedup_valuation dv       ON dv.loanapplicationid = pd.loanapplicationid AND dv.rn = 1
-LEFT JOIN dedup_report_imd ri      ON ri.loanapplicationid = pd.loanapplicationid AND ri.rn = 1
-LEFT JOIN dedup_surrounding_imd si ON si.loanapplicationid = pd.loanapplicationid AND si.rn = 1
 LEFT JOIN dedup_vetting rv         ON rv.loanapplicationid = pd.loanapplicationid AND rv.rn = 1
 LEFT JOIN dedup_legal lr           ON lr.loanapplicationid = pd.loanapplicationid AND lr.rn = 1
 LEFT JOIN dedup_firing tf          ON tf.loanapplicationid = pd.loanapplicationid AND tf.rn = 1
 LEFT JOIN dedup_surrounding ps     ON ps.loanapplicationid = pd.loanapplicationid AND ps.rn = 1
+LEFT JOIN technical_report tr      ON lr.loanapplicationid = pd.loanapplicationid AND lr.rn = 1
 
 LEFT JOIN dmihfclos.mstcity mc     ON mc.cityid = pd.cityid AND mc.isactive = 1
 LEFT JOIN dmihfclos.mstdistrict md ON md.districtid = pd.districtid AND md.isactive = 1
