@@ -149,8 +149,8 @@ LoanApplicationDetails AS (
         COALESCE(pm.current_emi, lad.currentEMI) AS current_emi,                    --- added     /*tblLoanApplicationPaySchedule dueamount of current month dueDate */
         ds.emiCycle AS emi_cycle_day,
         ds.hypothecation AS hypothecation_detail,
-        COALESCE(TRIM(la.finalStatus),'NULL') AS final_status,                   --- added     /* this is null field */
-        curr_status.typeDetailDisplayText AS statustypedetailid,
+        COALESCE(TRIM(la.Statustypedetailid),'NULL') AS loanstatus_typedetail_id,     -- text display to add                 --- added     /* this is null field */
+        curr_status.typeDetailDisplayText AS loan_status,
         CAST(ds.moratoriumMonths AS INTEGER) AS moratorium_months,                   --- added    /* tblLoanApplicationDisbursalDetail  , momoratoriumMonths */
         TRIM(ds.fundingSouce) AS funding_source,
         lad.inorganicType  AS inorganic_type,
@@ -183,8 +183,8 @@ LoanApplicationDetails AS (
 --         ON la.loanApplicationID = lsh.loanApplicationID
 --         AND lsh.isActive = 1
     LEFT JOIN dmihfclos.tblTypeDetail curr_status
-        ON la.statustypedetailid = ts.typeDetailID
-        AND ts.isActive = 1  /*  inner join */
+        ON la.statustypedetailid = curr_status.typeDetailID
+        AND curr_status.isActive = 1  /*  inner join */
 
     LEFT JOIN dmihfclos.tblTypeDetail ts
         ON la.loanSchemeTypeDetailID = ts.typeDetailID
@@ -403,7 +403,7 @@ ls.balance_tenure_months,
 ls.sanctioned_emi,
 ls.current_emi,
 ls.emi_cycle_day,
-ls.final_status,
+ls.loan_status,
 ls.funding_source,
 ls.inorganic_type,
 ls.current_roi_pct,
@@ -434,7 +434,7 @@ ls.first_Disbursed_Amount,
 ls.loan_Downsize_Date,
 ls.is_Actually_Fully_Disbursed,
 ls.current_ROI,
-ls.current_Tenur,
+ls.current_Tenure,
 ls.balance_Tenure,
 ls.sanction_LTV,
 ls.tagged_With,
@@ -452,6 +452,7 @@ ls.created_By,
 ls.last_Modified_By,
 ls.fraud_Detection_Date,
 ls.fraud_Type,
+ls. loanstatus_typedetail_id,
 ls.preferred_Language_TypeDetailID,
 LS.digital_Team_Emp_ID,
 
