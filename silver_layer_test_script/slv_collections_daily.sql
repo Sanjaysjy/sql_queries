@@ -28,7 +28,7 @@ WITH cte_receipt_agg AS (
 cte_followup_latest AS (
     SELECT
         loanapplicationid,
-        followuptypedetailid
+        followuptypedetailid     --typeID description
     FROM (
         SELECT
             loanapplicationid,
