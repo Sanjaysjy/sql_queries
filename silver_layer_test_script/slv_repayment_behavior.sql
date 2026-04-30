@@ -51,8 +51,8 @@ manual_receipt AS (
     SELECT
         loanapplicationid,
         pdcachdate,
-        statustypedetailid,
-        bouncereasontypedetailid,
+        statustypedetailid,  --typeId Description
+        bouncereasontypedetailid,  --typeId Description
         ispresented,
         ROW_NUMBER() OVER (
             PARTITION BY loanapplicationid, pdcachdate
@@ -84,9 +84,9 @@ SELECT
     --18.  [penal_adjusted]:    matching source field not present
 
     pd.ispresented AS presentation_status,
-    pd.bouncereasontypedetailid AS bounce_reason,
+    pd.bouncereasontypedetailid AS bounce_reason,  --typeId Description
 
-    mr.collectedthroughtypedetailid as presentation_mode,
+    mr.collectedthroughtypedetailid as presentation_mode,  --typeId Description
 
     -- [batch_no]    matching source field not present
     -- [reconciliation_date]    matching source field not present
