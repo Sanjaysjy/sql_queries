@@ -45,20 +45,20 @@ dedup_surrounding AS (
 
 base AS (
 SELECT
-    pd.applicantpropertydetailid AS property_detail_id,
+    pd.applicantpropertydetailid AS property_detail_id,  
     pd.loanapplicationid AS loan_application_id,
     ps.parentpropertyid AS parent_property_id,
 
-    pd.unittypetypedetailid AS unit_type,
-    pd.propertytypedetailid AS property_type,
-    rv.classificationtypedetailid   AS property_classification,
-    rv.urbanruraltypedetailid   AS urban_rural,
-    pd.ownershiptypedetailid AS ownership_type,
-    pd.natureofpropertytransactiontypedetailid  AS nature_of_transaction,
-    rv.transitiontypedetailid   AS transaction_type,
-    pd.endusetypedetailid  AS end_use,
-    pd.propertydocumenttypedetailid  AS property_document_type,
-    pd.alreadyownedpropertytypedetailid AS already_owned_property,
+    pd.unittypetypedetailid AS unit_type,  --typeId Description
+    pd.propertytypedetailid AS property_type,  --typeId Description
+    rv.classificationtypedetailid   AS property_classification,  --typeId Description
+    rv.urbanruraltypedetailid   AS urban_rural,  --typeId Description
+    pd.ownershiptypedetailid AS ownership_type, --typeId Description
+    pd.natureofpropertytransactiontypedetailid  AS nature_of_transaction,  --typeId Description
+    rv.transitiontypedetailid   AS transaction_type, --typeId Description
+    pd.endusetypedetailid  AS end_use,  --typeId Description
+    pd.propertydocumenttypedetailid  AS property_document_type,  --typeId Description
+    pd.alreadyownedpropertytypedetailid AS already_owned_property,  --typeId Description
 
     CASE WHEN pd.isfirstproperty = '1' THEN TRUE ELSE FALSE END AS is_first_property,
 
@@ -93,8 +93,8 @@ SELECT
     ps.pakhasrasurveyno  AS tech_khasra_survey_no,
 
     CASE
-        WHEN ps.isitselfoccupiedpropertybyapplicanttypedetailid IS NULL THEN NULL
-        WHEN ps.isitselfoccupiedpropertybyapplicanttypedetailid = '1' THEN TRUE
+        WHEN ps.isitselfoccupiedpropertybyapplicanttypedetailid IS NULL THEN NULL  --typeId Description
+        WHEN ps.isitselfoccupiedpropertybyapplicanttypedetailid = '1' THEN TRUE  --typeId Description
         ELSE FALSE
     END AS is_self_occupied,
 
@@ -146,12 +146,12 @@ SELECT
     lr.legaldetailstatustypedetailid AS legal_report_status,
 
     CASE
-        WHEN lr.vendorclearandmarketabletitletypedetailid IS NULL THEN NULL
-        WHEN lr.vendorclearandmarketabletitletypedetailid = '1' THEN TRUE
+        WHEN lr.vendorclearandmarketabletitletypedetailid IS NULL THEN NULL  --typeId Description
+        WHEN lr.vendorclearandmarketabletitletypedetailid = '1' THEN TRUE  --typeId Description
         ELSE FALSE
     END AS title_clear,
 
-    tf.reportfiringtypedetailid AS tech_firing_type,
+    tf.reportfiringtypedetailid AS tech_firing_type, --typeId Description
     ma.agencyname AS tech_agency_name,
 
     CAST(tf.firingdate AS DATE)         AS tech_firing_date,
