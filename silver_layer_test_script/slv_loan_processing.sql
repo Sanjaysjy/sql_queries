@@ -19,14 +19,14 @@ cte_disbursal_latest AS (
     SELECT
         loanapplicationid,
         disbursedamount,
-        favouringcategorytypedetailid,
-        transactiontypedetailid
+        favouringcategorytypedetailid,  --typeId Description
+        transactiontypedetailid  --typeId Description
     FROM (
         SELECT
             loanapplicationid,
             disbursedamount,
-            favouringcategorytypedetailid,
-            transactiontypedetailid,
+            favouringcategorytypedetailid,  --typeId Description
+            transactiontypedetailid,   --typeId Description
             ROW_NUMBER() OVER ( PARTITION BY loanapplicationid ORDER BY disburseddate DESC, favouringid DESC) AS rn
         FROM dmihfclos.tblloanapplicationdisbursmentfavouring
         where isactive=1
@@ -37,13 +37,13 @@ cte_pd_deduped AS (
     SELECT
         loanapplicationid,
         pddonebyentityid,
-        pdstatustypedetailid,
+        pdstatustypedetailid,  --typeId Description
         dateperformed
     FROM (
         SELECT
             loanapplicationid,
             pddonebyentityid,
-            pdstatustypedetailid,
+            pdstatustypedetailid,  --typeId Description
             dateperformed,
             ROW_NUMBER() OVER ( PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC ) AS rn
         FROM dmihfclos.tblloanapplicationpdreport
@@ -71,12 +71,12 @@ SELECT
     CAST(da.last_tranche_date AS DATE) AS last_tranche_date,
     CAST(dl.disbursedamount AS DECIMAL(14,2)) AS last_tranche_amount,
 
-    CAST(dl.favouringcategorytypedetailid AS VARCHAR(200))  AS cheque_favouring_category,
-    CAST(dl.transactiontypedetailid AS VARCHAR(200))  AS payment_type,
+    CAST(dl.favouringcategorytypedetailid AS VARCHAR(200))  AS cheque_favouring_category,  --typeId Description
+    CAST(dl.transactiontypedetailid AS VARCHAR(200))  AS payment_type,  --typeId Description
 
     CAST(pd.pddonebyentityid AS VARCHAR(200)) AS pd_done_by,
     CAST(pd.dateperformed AS DATE) AS pd_done_date,
-    CAST(pd.pdstatustypedetailid AS VARCHAR(100)) AS pd_status,
+    CAST(pd.pdstatustypedetailid AS VARCHAR(100)) AS pd_status,  --typeId Description
     CAST(sh.applicationaccepteddate AS DATE) AS file_acceptance_date,
 
 --   11.  welcome_kit_status -->> needs confirmation on this logic derived
