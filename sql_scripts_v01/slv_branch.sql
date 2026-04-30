@@ -1,4 +1,10 @@
+-- slv_branch
+-- DROP TABLE IF EXISTS silver.slv_branch;
 
+CREATE TABLE silver.slv_branch
+DISTKEY(branch_id)
+SORTKEY(branch_id)
+AS
 
 WITH deduped_branch AS (
     SELECT *
