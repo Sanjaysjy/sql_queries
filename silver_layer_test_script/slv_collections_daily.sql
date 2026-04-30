@@ -60,7 +60,7 @@ SELECT
     COALESCE(CAST(ra.receipt_amount AS DECIMAL(18, 2)), CAST(0 AS DECIMAL(18, 2))) AS daily_receipt_amount,
     COALESCE(CAST(pa.presentation_count  AS INT), CAST(0 AS INT)) AS daily_presentations,
     COALESCE(CAST(pa.bounce_count        AS INT), CAST(0 AS INT)) AS daily_bounces,
-    cf.followuptypedetailid AS followup_type,
+    cf.followuptypedetailid AS followup_type,    --typeID description
     TRIM(lds.sourcefundingname) AS source_funding_name,
     CAST(lds.createdon AS TIMESTAMP) AS record_created_at,
     CAST(lds.lastmodifiedon AS TIMESTAMP) AS record_modified_a,

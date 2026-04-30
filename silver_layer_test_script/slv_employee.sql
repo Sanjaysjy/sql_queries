@@ -1,4 +1,5 @@
 -- slv_employee
+DROP TABLE IF EXISTS silver.slv_employee;
 CREATE TABLE silver.slv_employee
 DISTKEY(employee_id)
 SORTKEY(employee_id)
@@ -15,6 +16,7 @@ WITH emp_dedup AS (
         designationtypedetailid,
         parentemployeeid,
         joiningdate,
+        isResigned,
         relivingdate,
         isactive,
         createdon,
@@ -113,6 +115,7 @@ SELECT
     CAST(e.parentemployeeid AS INT)    AS parent_employee_id,
     CAST(e.joiningdate AS DATE)    AS joining_date,
     CAST(e.relivingdate AS DATE)    AS relieving_date,
+    e.isResigned  AS is_Resigned, 
     CASE WHEN e.isactive = 1 THEN TRUE ELSE FALSE END    AS is_active,
 
     la.loans_onboarded_total,
