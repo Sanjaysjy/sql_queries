@@ -11,8 +11,8 @@ WITH emp_dedup AS (
         employeename,
         basebranchid,
         departmentid,
-        designationleveltypedetailid,
-        designationtypedetailid,
+        designationleveltypedetailid,  --typeId Description
+        designationtypedetailid,  --typeId Description
         parentemployeeid,
         joiningdate,
         relivingdate,
@@ -108,8 +108,8 @@ SELECT
     CAST(e.basebranchid AS INT)  AS base_branch_id,
     mb.branchname      AS base_branch_name,
     e.departmentid     AS department,
-    e.designationtypedetailid   AS designation,
-    e.designationleveltypedetailid    AS designation_level,
+    e.designationtypedetailid   AS designation,     --typeId Description
+    e.designationleveltypedetailid    AS designation_level,    --typeId Description
     CAST(e.parentemployeeid AS INT)    AS parent_employee_id,
     CAST(e.joiningdate AS DATE)    AS joining_date,
     CAST(e.relivingdate AS DATE)    AS relieving_date,
