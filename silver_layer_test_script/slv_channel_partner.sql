@@ -12,12 +12,12 @@ WITH CombinedData AS (
         dsa.isActive,
         dsa.isDormant,
         dsa.baseLocation AS base_location_branch_id,
-        renewal.approvalStatusTypeDetailID AS approval_status_id,
+        renewal.approvalStatusTypeDetailID AS approval_status_id,  --typeId Description
         renewal.createdOn AS record_created_at,
         renewal.lastModifiedOn AS record_modified_at
     FROM dmihfclos.tblDsa dsa
     LEFT JOIN dmihfclos.tblEntity entity ON dsa.entityID = entity.entityID
-    LEFT JOIN dmihfclos.tblTypeDetail typeDetail ON dsa.channelTypeTypeDetailID = typeDetail.typeDetailID
+    LEFT JOIN dmihfclos.tblTypeDetail typeDetail ON dsa.channelTypeTypeDetailID = typeDetail.typeDetailID 
     LEFT JOIN dmihfclos.tblDsaRenewal renewal ON dsa.dsaID = renewal.dsaID
     WHERE dsa.isActive = 1 --and dsa_id = 455
 ),
