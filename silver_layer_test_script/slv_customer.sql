@@ -23,21 +23,21 @@ WITH base_appl AS (
         spouseLastName,
         dateOfBirth,
         age,
-        genderTypeDetailID,
-        maritialStatusTypeDetailID,
-        nationalityTypeDetailID,
-        religionTypeDetailID,
-        casteTypeDetailID,
+        genderTypeDetailID,  --typeId Description
+        maritialStatusTypeDetailID,  --typeId Description
+        nationalityTypeDetailID,  --typeId Description
+        religionTypeDetailID, --typeId Description
+        casteTypeDetailID,  --typeId Description
         isMinority,
         isMainApplicant,
-        relationshipTypeDetailId,
+        relationshipTypeDetailId,  --typeId Description
         isDisabled,
         isExServicemen,
         isManualScavenger,
-        isHomeMakerTypeDetailID,
-        qualificationTypeDetailID,
-        detailQualificationTypeDetailID,
-        livingStandardTypeDetailId,
+        isHomeMakerTypeDetailID, --typeId Description
+        qualificationTypeDetailID,  --typeId Description
+        detailQualificationTypeDetailID,  --typeId Description
+        livingStandardTypeDetailId, --typeId Description
         isNegativeProfile,
         isCustomerHavePoliticalLink,
         isRegularRTRPostDefault,
@@ -56,8 +56,8 @@ addr_cur AS (
         landmark,
         blocktaluka ,
         stayinginyears ,
-        addressTypeDetailID,
-        residenceTypeTypeDetailID,
+        addressTypeDetailID,  --typeId Description
+        residenceTypeTypeDetailID,  --typeId Description
         ROW_NUMBER() OVER (PARTITION BY entityID ORDER BY lastModifiedOn DESC) AS rn
     FROM dmihfclos.tblAddress
     WHERE isActive = 1
@@ -67,17 +67,17 @@ occ_det AS (
     SELECT
         applicantID,
         loanApplicationID,
-        profileSegmentTypeDetailID,
-        subProfileTypeDetailID,
+        profileSegmentTypeDetailID,  --typeId Description
+        subProfileTypeDetailID,  --typeId Description
         companyName,
         retirementage ,
-        industryTypeDetailID,
-        subIndustryTypeDetailID,
-        constitutionTypeDetailID,
-        nhbQOccupationTypeDetailID,
-        occupationSubTypeDetailID,
-        employmentTypeDetailID,
-        sectorTypeDetailID,
+        industryTypeDetailID,  --typeId Description
+        subIndustryTypeDetailID,  --typeId Description
+        constitutionTypeDetailID,   --typeId Description
+        nhbQOccupationTypeDetailID,  --typeId Description
+        occupationSubTypeDetailID,  --typeId Description
+        employmentTypeDetailID,  --typeId Description
+        sectorTypeDetailID,  --typeId Description
         designation,
         gstRegistration,
         dateOfIncorporation,
@@ -105,7 +105,7 @@ kyc_pan AS (
         ROW_NUMBER() OVER (PARTITION BY applicantID, loanApplicationID ORDER BY lastModifiedOn DESC) AS rn
     FROM dmihfclos.tblApplicantKyc
     WHERE isActive = 1
-      AND identificationTypeDetailID = 56
+      AND identificationTypeDetailID = 56  --typeId Description
 ),
 
 kyc_aadh AS (
@@ -116,7 +116,7 @@ kyc_aadh AS (
         ROW_NUMBER() OVER (PARTITION BY applicantID, loanApplicationID ORDER BY lastModifiedOn DESC) AS rn
     FROM dmihfclos.tblApplicantKyc
     WHERE isActive = 1
-      AND identificationTypeDetailID = 230
+      AND identificationTypeDetailID = 230  --typeId Description
 ),
 
 kyc_voter AS (
@@ -127,7 +127,7 @@ kyc_voter AS (
         ROW_NUMBER() OVER (PARTITION BY applicantID, loanApplicationID ORDER BY lastModifiedOn DESC) AS rn
     FROM dmihfclos.tblApplicantKyc
     WHERE isActive = 1
-      AND identificationTypeDetailID = 233
+      AND identificationTypeDetailID = 233  --typeId Description
 ),
 
 kyc_pass AS (
@@ -138,7 +138,7 @@ kyc_pass AS (
         ROW_NUMBER() OVER (PARTITION BY applicantID, loanApplicationID ORDER BY lastModifiedOn DESC) AS rn
     FROM dmihfclos.tblApplicantKyc
     WHERE isActive = 1
-      AND identificationTypeDetailID = 231
+      AND identificationTypeDetailID = 231  --typeId Description
 ),
 
 kyc_dl AS (
@@ -149,14 +149,14 @@ kyc_dl AS (
         ROW_NUMBER() OVER (PARTITION BY applicantID, loanApplicationID ORDER BY lastModifiedOn DESC) AS rn
     FROM dmihfclos.tblApplicantKyc
     WHERE isActive = 1
-      AND identificationTypeDetailID = 232
+      AND identificationTypeDetailID = 232  --typeId Description
 ),
 
 kyc_stat AS (
     SELECT
         applicantID,
         loanApplicationID,
-        verifiedStatusTypeDetailID,
+        verifiedStatusTypeDetailID,--typeId Description
         ROW_NUMBER() OVER (PARTITION BY applicantID, loanApplicationID ORDER BY lastModifiedOn DESC) AS rn
     FROM dmihfclos.tblApplicantKyc
     WHERE isActive = 1
@@ -167,7 +167,7 @@ risk_rec AS (
     SELECT
         applicantID,
         loanApplicationID,
-        riskTypeDetailID,
+        riskTypeDetailID,--typeId Description
         ROW_NUMBER() OVER (PARTITION BY applicantID, loanApplicationID ORDER BY lastModifiedOn DESC) AS rn
     FROM dmihfclos.tblApplicantRisk
     WHERE isActive = 1
@@ -181,7 +181,7 @@ bur_cibil AS (
         ROW_NUMBER() OVER (PARTITION BY entityID, loanApplicationID ORDER BY reportDate DESC) AS rn
     FROM dmihfclos.tblEntityBureau
     WHERE isActive = 1
-      AND bureauTypeDetailId = 410
+      AND bureauTypeDetailId = 410   --typeId Description
 ),
 
 ascore_rec AS (
@@ -240,10 +240,10 @@ SELECT
     CASE WHEN ba.isDisabled = 1 THEN TRUE WHEN ba.isDisabled = 0 THEN FALSE ELSE NULL END AS is_disabled,
     CASE WHEN ba.isExServicemen = 1 THEN TRUE WHEN ba.isExServicemen = 0 THEN FALSE ELSE NULL END AS is_exservicemen,
     CASE WHEN ba.isManualScavenger = 1 THEN TRUE WHEN ba.isManualScavenger = 0 THEN FALSE ELSE NULL END AS is_manualscavenger,
-    CASE WHEN ba.isHomeMakerTypeDetailID IS NOT NULL THEN TRUE ELSE FALSE END AS is_homemaker,
+    CASE WHEN ba.isHomeMakerTypeDetailID IS NOT NULL THEN TRUE ELSE FALSE END AS is_homemaker,   --typeId Description
     td_qual.typeDetailDescription AS qualification,
     td_dqual.typeDetailDescription AS detailed_qualification,
-    CASE WHEN ba.livingStandardTypeDetailId IS NOT NULL THEN TRUE ELSE FALSE END AS lsi,
+    CASE WHEN ba.livingStandardTypeDetailId IS NOT NULL THEN TRUE ELSE FALSE END AS lsi,  --typeId Description
     CASE WHEN ba.isNegativeProfile = 1 THEN TRUE WHEN ba.isNegativeProfile = 0 THEN FALSE ELSE NULL END AS negative_caution_profile,
     CASE WHEN ba.isCustomerHavePoliticalLink = 1 THEN TRUE WHEN ba.isCustomerHavePoliticalLink = 0 THEN FALSE ELSE NULL END AS is_politacally_linked,
     CASE WHEN ba.isRegularRTRPostDefault = 1 THEN 'Yes' WHEN ba.isRegularRTRPostDefault = 0 THEN 'No' ELSE NULL END AS regular_rtr,
@@ -293,9 +293,9 @@ SELECT
     -- bt_loan_financer
     -- cash_deposit_sync_business -- source table not present
 
-    abd.bankNameTypeDetailID AS bank_name,
-    abd.accountTypeDetailID AS account_type,
-    abd.salaryCreditTypeDetailID AS salary_credited,
+    abd.bankNameTypeDetailID AS bank_name,  --typeId Description
+    abd.accountTypeDetailID AS account_type,   --typeId Description
+    abd.salaryCreditTypeDetailID AS salary_credited,  --typeId Description
     -- oblig.repaymentBankTypeDetailID AS dmi_repayment_bank,
     abd.isAbnormalTransaction AS abnormal_transaction_nontracable,
 
