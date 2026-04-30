@@ -20,7 +20,7 @@ WITH cte_receipt_agg AS (
         loanapplicationid,
         presentationdate,
         COUNT(presentationdetailid) AS presentation_count,
-        COUNT(CASE WHEN bouncereasontypedetailid IS NOT NULL THEN 1 END) AS bounce_count
+        COUNT(CASE WHEN bouncereasontypedetailid IS NOT NULL THEN 1 END) AS bounce_count    --typeId Description
     FROM dmihfclos.tblloanapplicationpresentationdetail
     WHERE isactive = 1
     GROUP BY loanapplicationid,  presentationdate
@@ -28,11 +28,11 @@ WITH cte_receipt_agg AS (
 cte_followup_latest AS (
     SELECT
         loanapplicationid,
-        followuptypedetailid
+        followuptypedetailid     --typeId Description
     FROM (
         SELECT
             loanapplicationid,
-            followuptypedetailid,
+            followuptypedetailid,  --typeId Description
             ROW_NUMBER() OVER ( PARTITION BY loanapplicationid  ORDER BY followupdate DESC) AS rn
         FROM dmihfclos.tblcollectionfollowup
         WHERE isactive      = 1  AND islastrecord  = 1
@@ -60,7 +60,7 @@ SELECT
     COALESCE(CAST(ra.receipt_amount AS DECIMAL(18, 2)), CAST(0 AS DECIMAL(18, 2))) AS daily_receipt_amount,
     COALESCE(CAST(pa.presentation_count  AS INT), CAST(0 AS INT)) AS daily_presentations,
     COALESCE(CAST(pa.bounce_count        AS INT), CAST(0 AS INT)) AS daily_bounces,
-    cf.followuptypedetailid AS followup_type,
+    cf.followuptypedetailid AS followup_type,  --typeId Description
     TRIM(lds.sourcefundingname) AS source_funding_name,
     CAST(lds.createdon AS TIMESTAMP) AS record_created_at,
     CAST(lds.lastmodifiedon AS TIMESTAMP) AS record_modified_a,
