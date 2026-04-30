@@ -26,7 +26,7 @@ loan_agg AS (
     SUM(CASE WHEN CAST(ld.last_sanction_date AS DATE) = CURRENT_DATE  THEN 1 ELSE 0 END) AS total_loans_sanctioned,
     SUM(CASE WHEN CAST(ld.last_booked_date AS DATE) = CURRENT_DATE   THEN 1 ELSE 0 END) AS total_loans_booked,
     SUM(CASE WHEN CAST(ld.last_disbursal_date AS DATE) = CURRENT_DATE THEN 1 ELSE 0 END) AS total_loans_disbursed,
-    SUM(CASE  WHEN CAST(lash.createdon AS DATE) = CURRENT_DATE  THEN 1 ELSE 0  END) AS total_loans_disbursal_cancelled
+    SUM(CASE  WHEN loanstatustypedetailid = 1619 and  CAST(lash.createdon AS DATE) = CURRENT_DATE  THEN 1 ELSE 0  END) AS total_loans_disbursal_cancelled
 FROM silver.slv_loan_details ld
 
 LEFT JOIN dmihfclos.tblloanapplicationstatushistory lash
@@ -123,11 +123,7 @@ perf_agg AS (
         SUM(pwb.pos) AS total_pos,
         SUM(pwb.pos_after_sell) AS total_pos_after_sell,  /* column added */
         COUNT(CASE WHEN pwb.dpd > 0 THEN 1 END) AS dpd_count,
-        COUNT(CASE
-                WHEN UPPER(TRIM(pwb.is_npa)) IN ('1','TRUE','Y')
-                THEN 1
-              END
-        ) AS npa_count,
+        COUNT(CASE WHEN UPPER(TRIM(pwb.is_npa)) IN ('1','TRUE','Y') THEN 1 END) AS npa_count,
         SUM(CASE WHEN dpd_bucket = 'SMA-0' THEN 1 END) as sma0_count,
         SUM(CASE WHEN dpd_bucket = 'SMA-1' THEN 1 END) as sma1_count,
         SUM(CASE WHEN dpd_bucket = 'SMA-2' THEN 1 END) as sma2_count,
@@ -192,11 +188,11 @@ SELECT
     -- Codes
     TRIM(b.navcode) AS nav_code,
     TRIM(b.cersaicode) AS cersai_code,
-    CASE
-        WHEN UPPER(TRIM(b.isactive)) IN ('1','TRUE','Y')
-        THEN TRUE
-        ELSE FALSE
-    END AS is_active,
+--     CASE
+--         WHEN UPPER(TRIM(b.isactive)) IN ('1','TRUE','Y')
+--         THEN TRUE
+--         ELSE FALSE
+--     END AS is_active,
     -- Analytics
     COALESCE(la.total_loans_originated, 0) AS total_loans_originated,
     COALESCE(la.total_logins, 0) AS total_logins,
