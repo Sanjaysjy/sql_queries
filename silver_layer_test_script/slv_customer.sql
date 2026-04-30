@@ -293,9 +293,9 @@ SELECT
     -- bt_loan_financer
     -- cash_deposit_sync_business -- source table not present
 
-    abd.bankNameTypeDetailID AS bank_name,
-    abd.accountTypeDetailID AS account_type,
-    abd.salaryCreditTypeDetailID AS salary_credited,
+    abd.bankNameTypeDetailID AS bank_name,  --typeID description
+    abd.accountTypeDetailID AS account_type,  --typeID description
+    abd.salaryCreditTypeDetailID AS salary_credited,  --typeID description
     -- oblig.repaymentBankTypeDetailID AS dmi_repayment_bank,
     abd.isAbnormalTransaction AS abnormal_transaction_nontracable,
 
