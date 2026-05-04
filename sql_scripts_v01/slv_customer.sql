@@ -485,4 +485,4 @@ LEFT JOIN dmihfclos.tblTypeDetail td_sector
 LEFT JOIN dmihfclos.tblTypeDetail td_risk
     ON  td_risk.typeDetailID = cr.current_riskTypeDetailID
 
-WHERE ba.rn = 1  and isactive=1 ;
+WHERE ba.rn = 1  ;
