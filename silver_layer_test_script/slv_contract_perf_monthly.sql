@@ -13,6 +13,8 @@ AS
     lm.dueInterest AS due_interest,
     lm.duePrinciple AS due_principal,
     lm.previousDue AS previous_due,
+    lm.outstandinginsurance AS outstanding_insurance,
+    lm.accuredinterestnotdue    AS accrued_interest_notdue,
     lm.maxDeliquencyDay AS max_dpd,
     lm.isNPA AS is_npa,
     lm.npaStartDate AS npa_start_date,
@@ -42,6 +44,8 @@ AS
     lm.riskWeight AS risk_weight,
     lm.SourceFundingName AS source_funding_name,
     lm.liabilityCode AS liability_code,
+--     lm.     AS partner_name,   NO FILED FOUND
+--     lm.     AS engagement_date,
     lm.roi AS roi,
     lm.balanceTenor AS balance_tenur,
     lm.createdOn   AS  record_created_at,

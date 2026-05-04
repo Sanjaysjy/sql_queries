@@ -60,9 +60,9 @@ loan_agg AS (
 
         COUNT(CASE WHEN c.max_dpd > 0 THEN 1 END) AS loans_in_dpd,
 
-        COUNT(CASE 
+        COUNT(CASE
             WHEN UPPER(TRIM(c.is_npa)) IN ('1','TRUE','Y')
-            THEN 1 
+            THEN 1
         END) AS loans_in_npa,
 
         SUM(c.due_interest + c.due_principal) AS total_arrears_amount,
@@ -116,12 +116,17 @@ SELECT
     CAST(e.parentemployeeid AS INT)    AS parent_employee_id,
     CAST(e.joiningdate AS DATE)    AS joining_date,
     CAST(e.relivingdate AS DATE)    AS relieving_date,
-    e.isResigned  AS is_Resigned, 
+    e.isResigned  AS is_Resigned,
     CASE WHEN e.isactive = 1 THEN TRUE ELSE FALSE END    AS is_active,
+    e.entityid as entity_id,                            --- ADDED 
 
     la.loans_onboarded_total,
     la.loans_onboarded_mtd,
     la.total_disbursed_amount,
+
+    u.userid  AS user_id,                                --- ADDED
+    u.parententityid AS  parent_entity_id,              --- ADDED
+    u.usertypedetailid  AS user_typedetail_id,          --- ADDED
 
     pa.active_loan_count,
     pa.current_book_pos,
@@ -137,10 +142,12 @@ SELECT
     CURRENT_TIMESTAMP AS silver_loaded_at,
     TO_CHAR(GETDATE(),'YYYYMMDD_HH24MISS') AS silver_batch_id
 
-FROM emp_dedup e   
+FROM emp_dedup e
 LEFT JOIN loan_agg la
     ON la.sales_officer_emp_id = e.employeeid
 LEFT JOIN cte_mstbranch mb
     ON mb.entityid = e.entityid
+LEFT JOIN  dmihfclos.tbluser u
+    on u.entityid = e.entityid
 LEFT JOIN portfolio_metrics pa
 ON pa.employee_id = e.employeeid

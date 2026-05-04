@@ -1,4 +1,7 @@
 -- slv_asset
+
+-- DROP TABLE IF EXISTS silver.slv_asset;
+
 -- CREATE TABLE silver.slv_asset
 -- DISTKEY(loan_application_id)
 -- SORTKEY(property_detail_id, loan_application_id)
@@ -8,6 +11,12 @@ WITH dedup_valuation AS (
     SELECT *,
            ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) rn
     FROM dmihfclos.tblloantechnicaldiligencevaluation
+    WHERE isactive = 1
+),
+dedup_ApplicationDisbursalDetail AS (
+    SELECT *,
+           ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) rn
+    FROM dmihfclos.tblLoanApplicationDisbursalDetail
     WHERE isactive = 1
 ),
 dedup_vetting AS (
@@ -140,10 +149,41 @@ SELECT
     CASE WHEN TRIM(REPLACE(CAST(dv.valuationbuilding AS VARCHAR(50)), '%', '')) ~ '^-?[0-9]+(\.[0-9]+)?$'
          THEN CAST(TRIM(REPLACE(CAST(dv.valuationbuilding AS VARCHAR(50)), '%', '')) AS DECIMAL(20, 2))
          ELSE NULL END AS building_pct,
+
+             --- no field found
+    dv.valuationlandarearatepersquarefeet  AS buildup_existing_rate_per_sqft,
+    dv.valuationbuiltupareaproposedratepersquarefeet  AS buildup_proposed_rate_per_sqft,
+    dv.valuationsuperbuiltuparearatepersquarefeet  as super_buildup_rate_per_sqft,
+    dv.valuationcarpetarea  as carpet_area,
+    dv.valuationcarpetarearatepersquarefeet  AS carper_area_rate,
+
+
     CASE WHEN TRIM(REPLACE(CAST(dv.valuationunitbeingfunded AS VARCHAR(50)), '%', '')) ~ '^-?[0-9]+(\.[0-9]+)?$'
          THEN CAST(TRIM(REPLACE(CAST(dv.valuationunitbeingfunded AS VARCHAR(50)), '%', '')) AS DECIMAL(20, 2))
          ELSE NULL END  AS unit_funded_pct,
     lr.legaldetailstatustypedetailid AS legal_report_status,
+    tf.agencyid   as legal_agency_name,
+    lr.advocatename  as legal_advocate_name,
+    tf.reportreceiveddate      as report_date,
+    TRIM(
+        COALESCE(NULLIF(TRIM(lr.houseno), ''), '') ||
+        CASE WHEN TRIM(lr.floorno)   <> '' THEN ', ' || TRIM(lr.floorno)   ELSE '' END ||
+        CASE WHEN TRIM(lr.wingno)    <> '' THEN ', ' || TRIM(lr.wingno)    ELSE '' END ||
+        CASE WHEN TRIM(lr.buildingno)<> '' THEN ', ' || TRIM(lr.buildingno)ELSE '' END ||
+        CASE WHEN TRIM(lr.plotno)    <> '' THEN ', ' || TRIM(lr.plotno)    ELSE '' END ||
+        CASE WHEN TRIM(lr.surveyno)  <> '' THEN ', ' || TRIM(lr.surveyno)  ELSE '' END ||
+        CASE WHEN TRIM(lr.streetno)  <> '' THEN ', ' || TRIM(lr.streetno)  ELSE '' END ||
+        CASE WHEN TRIM(lr.stageno)   <> '' THEN ', ' || TRIM(lr.stageno)   ELSE '' END ||
+        CASE WHEN TRIM(lr.landmark)  <> '' THEN ', ' || TRIM(lr.landmark)  ELSE '' END ||
+        CASE WHEN TRIM(lr.village)   <> '' THEN ', ' || TRIM(lr.village)   ELSE '' END ||
+        CASE WHEN TRIM(lr.mouza)     <> '' THEN ', ' || TRIM(lr.mouza)     ELSE '' END
+    ) AS  legal_address,
+    lr.cityid  as legal_city,
+    lr.districtid  AS legal_district,
+    lr.stateid  AS legal_state,
+    lr.pincode  AS legal_pincode,
+
+
 
     CASE
         WHEN lr.vendorclearandmarketabletitletypedetailid IS NULL THEN NULL
@@ -153,6 +193,12 @@ SELECT
 
     tf.reportfiringtypedetailid AS tech_firing_type,
     ma.agencyname AS tech_agency_name,
+
+    ladd.landplotrate AS  agreement_land_rate_per_sqft,
+    ladd.existingconstructionbuiltuprate  AS agreement_buildup_existing_rate_per_sqft,
+    ladd.proposedconstructionbuiltuprate AS agreement_buildup_proposed_rate_per_sqft,
+    ladd.constructionsuperbuiltuprate AS agreement_super_buildup_rate_per_sqft,
+
 
     CAST(tf.firingdate AS DATE)         AS tech_firing_date,
     CAST(tf.reportreceiveddate AS DATE) AS tech_report_received_date,
@@ -166,6 +212,7 @@ SELECT
 FROM dmihfclos.tblapplicationpropertydetail pd
 
 LEFT JOIN dedup_valuation dv       ON dv.loanapplicationid = pd.loanapplicationid AND dv.rn = 1
+LEFT JOIN dedup_ApplicationDisbursalDetail  ladd on ladd.loanapplicationid = pd.loanapplicationid and ladd.rn = 1
 LEFT JOIN dedup_vetting rv         ON rv.loanapplicationid = pd.loanapplicationid AND rv.rn = 1
 LEFT JOIN dedup_legal lr           ON lr.loanapplicationid = pd.loanapplicationid AND lr.rn = 1
 LEFT JOIN dedup_firing tf          ON tf.loanapplicationid = pd.loanapplicationid AND tf.rn = 1
