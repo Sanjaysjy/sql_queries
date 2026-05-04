@@ -1,3 +1,10 @@
+-- SELECT count(loan_application_id) from  silver.slv_contract_perf_monthly
+
+-- WHERE  EXTRACT( month from ) ;
+
+
+-- loanstatus_typedetail_id
+
   -- slv_contract_perf_monthly
 drop table if exists silver.slv_contract_perf_monthly;
 
@@ -41,7 +48,7 @@ AS
 --     lm.loss_given_default
 -- confirmation on which column to use
     lm.statustypedetailid AS  loanstatus_typedetail_id,
-    tb.typeDetailDisplayText  as loan_status,
+    curr_status.typeDetailDisplayText  as loan_status,
 
 
     lm.provisionsValue AS provisions_value,
@@ -62,6 +69,8 @@ AS
     lm.presentationstatus  as presentation_status,
     lm.collectionbkt  as collection_bkt,
     lm.fixedduration  as fixed_duration,
+    lm.summarymonth  as summary_month,
+    lm.summaryyear  as summary_year,
 
 
     lm.balanceTenor AS balance_tenur,
@@ -72,8 +81,13 @@ AS
 FROM
     dmihfclos.tblLoanMonthly lm
 LEFT JOIN dmihfclos.tblTypeDetail curr_status
-    ON la.statustypedetailid = curr_status.typeDetailID
+    ON lm.statustypedetailid = curr_status.typeDetailID
     AND curr_status.isActive = 1
+-- LEFT JOIN dmihfclos.tblPortfolioPartnerEngagementDetail ped
+--     ON lm.engagementID = ped.engagementID
+--     AND ped.isActive = 1
   LEFT JOIN
     dmihfclos.tblTypeDetail td ON lm.maxDeliquencyDay = td.typeDetailID
-        and  td.isactive=1  ;
+        and  td.isactive=1
+
+where lm.isactive=1     ;

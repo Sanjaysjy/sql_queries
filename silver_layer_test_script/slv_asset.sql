@@ -43,7 +43,13 @@ dedup_firing AS (
            ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) rn
     FROM dmihfclos.tblloantechnicalfiring
     WHERE isactive = 1
+),dedup_RevPropValuation AS (
+    SELECT *,
+           ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) rn
+    FROM  dmihfclos.tblLoanRevPropValuation
+    WHERE isactive = 1
 ),
+
 
 dedup_surrounding AS (
     SELECT *,
@@ -199,6 +205,8 @@ SELECT
     ladd.proposedconstructionbuiltuprate AS agreement_buildup_proposed_rate_per_sqft,
     ladd.constructionsuperbuiltuprate AS agreement_super_buildup_rate_per_sqft,
 
+    rp.revisedmarketvalue  as revised_market_value,
+    coalesce(rp.valuationdate, rp.createdon)  as revised_valuation_date,
 
     CAST(tf.firingdate AS DATE)         AS tech_firing_date,
     CAST(tf.reportreceiveddate AS DATE) AS tech_report_received_date,
@@ -217,8 +225,8 @@ LEFT JOIN dedup_vetting rv         ON rv.loanapplicationid = pd.loanapplicationi
 LEFT JOIN dedup_legal lr           ON lr.loanapplicationid = pd.loanapplicationid AND lr.rn = 1
 LEFT JOIN dedup_firing tf          ON tf.loanapplicationid = pd.loanapplicationid AND tf.rn = 1
 LEFT JOIN dedup_surrounding ps     ON ps.loanapplicationid = pd.loanapplicationid AND ps.rn = 1
-LEFT JOIN technical_report tr      ON lr.loanapplicationid = pd.loanapplicationid AND lr.rn = 1
-
+LEFT JOIN technical_report tr      ON lr.loanapplicationid = pd.loanapplicationid AND tr.rn = 1
+LEFT JOIN dedup_RevPropValuation rp  on  rp.loanapplicationid = pd.loanapplicationid  and  rp.rn=1
 LEFT JOIN dmihfclos.mstcity mc     ON mc.cityid = pd.cityid AND mc.isactive = 1
 LEFT JOIN dmihfclos.mstdistrict md ON md.districtid = pd.districtid AND md.isactive = 1
 LEFT JOIN dmihfclos.mststate ms    ON ms.stateid = pd.stateid AND ms.isactive = 1
