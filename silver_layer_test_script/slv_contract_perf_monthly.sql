@@ -1,4 +1,7 @@
   -- slv_contract_perf_monthly
+drop table if exists silver.slv_contract_perf_monthly;
+
+
 CREATE TABLE silver.slv_contract_perf_monthly
 DISTKEY(loan_application_id)
 SORTKEY(loan_application_id)
@@ -37,23 +40,40 @@ AS
 --     lm.probability_of_default
 --     lm.loss_given_default
 -- confirmation on which column to use
---     lm. AS  loan_status,
---
+    lm.statustypedetailid AS  loanstatus_typedetail_id,
+    tb.typeDetailDisplayText  as loan_status,
+
 
     lm.provisionsValue AS provisions_value,
     lm.riskWeight AS risk_weight,
     lm.SourceFundingName AS source_funding_name,
     lm.liabilityCode AS liability_code,
---     lm.     AS partner_name,   NO FILED FOUND
---     lm.     AS engagement_date,
+
+    /*   have to make the changes */
+--     lm.     AS partner_name,
+--     lm.     AS engagement_date,   -- engagement id -->>  tblporfoli engg details -- > take the start date  -- and partner id -- mstporfoliapartner -- to get the parner name
+--   engagement type and assignmenttype  concat both -- for -- >  engagement_Type column
     lm.roi AS roi,
+
+    lm.assetclassificationdate  as asset_classification_date,
+    lm.currentltv  as current_ltv,
+    lm.fixedstartdate  as fixed_start_date,
+    lm.collectionstatus  as collection_status,
+    lm.presentationstatus  as presentation_status,
+    lm.collectionbkt  as collection_bkt,
+    lm.fixedduration  as fixed_duration,
+
+
     lm.balanceTenor AS balance_tenur,
     lm.createdOn   AS  record_created_at,
     lm.lastModifiedOn AS record_modified_at,
     CURRENT_TIMESTAMP AS silver_loaded_at,
     TO_CHAR(GETDATE(),'YYYYMMDD_HH24MISS') AS silver_batch_id
-  FROM
+FROM
     dmihfclos.tblLoanMonthly lm
+LEFT JOIN dmihfclos.tblTypeDetail curr_status
+    ON la.statustypedetailid = curr_status.typeDetailID
+    AND curr_status.isActive = 1
   LEFT JOIN
     dmihfclos.tblTypeDetail td ON lm.maxDeliquencyDay = td.typeDetailID
-        and  td.isactive=1
+        and  td.isactive=1  ;
