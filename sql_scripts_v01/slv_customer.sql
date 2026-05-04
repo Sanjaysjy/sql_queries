@@ -1,3 +1,13 @@
+-- slv_customer
+-- DROP TABLE IF EXISTS silver.slv_customer;
+
+--
+-- CREATE TABLE silver.slv_customer
+-- DISTSTYLE KEY
+-- DISTKEY(applicant_id)
+-- SORTKEY(loan_application_id)
+-- AS
+
 WITH base_appl AS (
     SELECT
         applicantID,
@@ -475,4 +485,4 @@ LEFT JOIN dmihfclos.tblTypeDetail td_sector
 LEFT JOIN dmihfclos.tblTypeDetail td_risk
     ON  td_risk.typeDetailID = cr.current_riskTypeDetailID
 
-WHERE ba.rn = 1;
+WHERE ba.rn = 1  and isactive=1 ;

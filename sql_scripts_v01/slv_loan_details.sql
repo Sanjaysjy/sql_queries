@@ -1,3 +1,12 @@
+-- slv_loan_details
+-- DROP TABLE IF EXISTS silver.slv_loan_details;
+--
+-- CREATE TABLE silver.slv_loan_details
+-- DISTSTYLE KEY
+-- DISTKEY (loan_application_id)
+-- SORTKEY (loan_application_id)
+-- AS
+
 WITH
 reschedule_latest AS (
     SELECT
@@ -456,6 +465,9 @@ ls. loanstatus_typedetail_id,
 ls.preferred_Language_TypeDetailID,
 LS.digital_Team_Emp_ID,
 
+-- pos values from the tbl_loandue_status
+lds.pos as pos ,
+lds.sellpos   as sell_pos,
 -- ROI
 rs.base_rate_pct,
 rs.plr_spread_pct,
@@ -525,6 +537,9 @@ FROM LoanApplicationSummary ls
 
 LEFT JOIN LoanApplicationAdditionalDetail lad
     ON ls.loan_application_id = lad.loan_application_id
+
+left join dmihfclos.tblloanduestatus  lds
+        ON lds.loanapplicationid = ls.loan_application_id
 
 LEFT JOIN roi_spread rs
     ON ls.loan_application_id = rs.loan_application_id
