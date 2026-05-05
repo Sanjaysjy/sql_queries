@@ -1,270 +1,161 @@
--- Silver Layer: slv_asset
+-- slv_employee
+-- DROP TABLE IF EXISTS silver.slv_employee;
 
--- DROP TABLE IF EXISTS silver.slv_asset;
+-- CREATE TABLE silver.slv_employee
+-- DISTKEY(employee_id)
+-- SORTKEY(employee_id)
+-- AS
 
+WITH emp_dedup AS (
+    SELECT
+        employeeid,
+        employeecode,
+        employeename,
+        basebranchid,
+        departmentid,
+        designationleveltypedetailid,
+        designationtypedetailid,
+        parentemployeeid,
+        joiningdate,
+        isResigned,
+        relivingdate,
+        isactive,
+        createdon,
+        entityid,
+        lastmodifiedon,
+        ROW_NUMBER() OVER (
+            PARTITION BY employeeid
+            ORDER BY lastmodifiedon DESC NULLS LAST
+        ) AS rn
+    FROM dmihfclos.tblemployee
+    where isactive =1
+),
+    cte_mstbranch  as(
+        select
+            branchname,
+            entityid
+    FROM dmihfclos.mstBranch
+    where isactive =1
+),
+loan_agg AS (
+    SELECT
+        sales_officer_emp_id,
+        COUNT(DISTINCT loan_application_id) AS loans_onboarded_total,
+        COUNT(
+            CASE
+                WHEN date_trunc('month', last_disbursal_date) = date_trunc('month', CURRENT_DATE)
+                THEN 1
+            END  ) AS loans_onboarded_mtd,
+        SUM(COALESCE(total_disbursed_amount, 0)) AS total_disbursed_amount
+    FROM silver.slv_loan_details
+    GROUP BY sales_officer_emp_id
+)
+-- Portfolio metrics
+,portfolio_metrics AS (
+    SELECT
+        ld.sales_officer_emp_id AS employee_id,
 
--- CREATE TABLE silver.slv_asset
--- DISTKEY
---     (loan_application_id)
--- SORTKEY
---     (property_detail_id, loan_application_id) AS
+        COUNT(CASE WHEN c.pos > 0 THEN 1 END) AS active_loan_count,
+        SUM(c.pos) AS current_book_pos,
 
+        COUNT(CASE WHEN c.max_dpd > 0 THEN 1 END) AS loans_in_dpd,
 
-    WITH dedup_valuation AS (
-        SELECT
-            *,
-            ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
-        FROM dmihfclos.tblloantechnicaldiligencevaluation
-        WHERE isactive = 1
-    ),
-    dedup_disbursal AS (
-        SELECT
-            *,
-            ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
-        FROM dmihfclos.tblloanapplicationdisbursaldetail
-        WHERE isactive = 1
-    ),
-    dedup_vetting AS (
-        SELECT
-            *,
-            ROW_NUMBER() OVER ( PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
-        FROM dmihfclos.tblloantechnicalreportvetting WHERE isactive = 1
-    ),
-    dedup_technical AS (
-        SELECT
-            *,
-            ROW_NUMBER() OVER ( PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
-        FROM dmihfclos.tblloantechnicalreport WHERE isactive = 1
-    ),
-    dedup_legal AS (
-        SELECT
-            *,
-            ROW_NUMBER() OVER ( PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
-        FROM dmihfclos.tblloanlegalreport WHERE isactive = 1
-    ),
-    dedup_firing AS (
-        SELECT
-            *,
-            ROW_NUMBER() OVER (PARTITION BY loanapplicationid  ORDER BY  lastmodifiedon DESC) AS rn
-        FROM dmihfclos.tblloantechnicalfiring WHERE isactive = 1
-    ),
-    dedup_revised_val AS (
-        SELECT
-            *,
-            ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
-        FROM dmihfclos.tblloanrevpropvaluation  WHERE  isactive = 1
-    ),
-    dedup_surrounding AS (
-        SELECT
-            *,
-            ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
-        FROM dmihfclos.tblloantechnicalpropertysurrounding
-        WHERE isactive = 1
-    )
+        COUNT(CASE
+            WHEN UPPER(TRIM(c.is_npa)) IN ('1','TRUE','Y')
+            THEN 1
+        END) AS loans_in_npa,
+
+        SUM(c.due_interest + c.due_principal) AS total_arrears_amount,
+
+        CASE
+            WHEN SUM(rd.totalamount) = 0 THEN 0
+            ELSE (SUM(rd.securedamount) / SUM(rd.totalamount)) * 100
+        END AS collection_efficiency_pct,
+
+        -- DPD %
+        CASE
+            WHEN COUNT(CASE WHEN c.pos > 0 THEN 1 END) > 0
+            THEN (
+                COUNT(CASE WHEN c.max_dpd > 0 THEN 1 END)::DECIMAL
+                / COUNT(CASE WHEN c.pos > 0 THEN 1 END)
+            ) * 100
+        END AS dpd_rate_pct,
+
+        -- NPA %
+        CAST(
+            ROUND(
+                SUM(
+                    CASE
+                        WHEN UPPER(TRIM(c.is_npa)) IN ('1','TRUE','Y')
+                        THEN c.pos ELSE 0
+                    END
+                ) / NULLIF(SUM(c.pos), 0) * 100,
+            2)
+        AS DECIMAL(6,2)) AS npa_rate_pct
+
+    FROM silver.slv_contract_perf_monthly c
+
+    JOIN silver.slv_loan_details ld
+        ON c.loan_application_id = ld.loan_application_id
+
+    LEFT JOIN dmihfclos.tblapplicantriskdetail rd
+        ON rd.loanapplicationid = c.loan_application_id
+       AND rd.isactive = 1
+
+    GROUP BY ld.sales_officer_emp_id
+)
 SELECT
-    --  Identifiers
-    pd.applicantpropertydetailid AS property_detail_id,
-    pd.loanapplicationid AS loan_application_id,
-    ps.parentpropertyid AS parent_property_id,
-    --  Property Type
-    pd.unittypetypedetailid AS unit_type,
-    pd.propertytypedetailid AS property_type,
-    rv.classificationtypedetailid AS property_classification,
-    rv.urbanruraltypedetailid AS urban_rural,
-    pd.ownershiptypedetailid AS ownership_type,
-    pd.natureofpropertytransactiontypedetailid AS nature_of_transaction,
-    rv.transitiontypedetailid AS transaction_type,
-    pd.endusetypedetailid AS end_use,
-    pd.propertydocumenttypedetailid AS property_document_type,
-    pd.alreadyownedpropertytypedetailid AS already_owned_property,
-    CASE WHEN pd.isfirstproperty = '1' THEN TRUE ELSE FALSE END AS is_first_property,
-    --  Location ─
-    TRIM(pd.propertyaddress) AS property_address,
-    mc.cityname AS property_city,
-    md.districtname AS property_district,
-    ms.statename AS property_state,
-    CASE WHEN TRIM(CAST(pd.pincode AS VARCHAR(50))) ~ '^[0-9]+$' THEN CAST(TRIM(CAST(pd.pincode AS VARCHAR(50))) AS INT) END AS property_pincode,
-    pd.isnegativearea = '1' AS is_negative_area,
-    CASE
-        WHEN REGEXP_REPLACE(ps.latitude, '[^0-9.\-]', '') ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
-            REGEXP_REPLACE(ps.latitude, '[^0-9.\-]', '') AS DECIMAL(20, 8)
-        ) * CASE
-        WHEN ps.latitude ILIKE '%S%' THEN -1
-    ELSE 1 END END AS latitude,
-    CASE
-        WHEN REGEXP_REPLACE(ps.longitude, '[^0-9.\-]', '') ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
-            REGEXP_REPLACE(ps.longitude, '[^0-9.\-]', '') AS DECIMAL(20, 8)
-        ) * CASE
-        WHEN ps.longitude ILIKE '%W%' THEN -1
-    ELSE 1 END END AS longitude,
-    --  Technical Address
-    ps.pacolonyprojectname AS tech_project_name,
-    ps.pakhasrasurveyno AS tech_khasra_survey_no,
-    CASE
-        WHEN ps.isitselfoccupiedpropertybyapplicanttypedetailid IS NULL THEN NULL
-        ELSE ps.isitselfoccupiedpropertybyapplicanttypedetailid = '1'
-    END AS is_self_occupied,
-    dv.iscompliantwithndmaguidelines = '1' AS is_ndma_compliant,
-    --  Valuation
-    CASE
-        WHEN TRIM(CAST(pd.propertyareasquareft AS VARCHAR(50))) ~ '^-?[0-9]+$' THEN CAST(
-        TRIM(CAST(pd.propertyareasquareft AS VARCHAR(50))) AS DECIMAL(20, 0)
-    ) END AS property_area_sqft,
-    CASE
-        WHEN REGEXP_REPLACE(pd.agreementvalue, '[^0-9.\-]', '') ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
-        REGEXP_REPLACE(pd.agreementvalue, '[^0-9.\-]', '') AS DECIMAL(20, 2)
-    ) END AS agreement_value,
-    CASE
-        WHEN REGEXP_REPLACE(pd.mvofproperty, '[^0-9.\-]', '') ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
-        REGEXP_REPLACE(pd.mvofproperty, '[^0-9.\-]', '') AS DECIMAL(20, 2)
-    ) END AS market_value,
-    CASE
-        WHEN REGEXP_REPLACE(dv.valuationtotalfairmarketvalue, '[^0-9.\-]', '') ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
-        REGEXP_REPLACE(dv.valuationtotalfairmarketvalue, '[^0-9.\-]', '') AS DECIMAL(20, 2)
-    ) END AS fair_market_value,
-    CASE
-        WHEN TRIM(CAST(dv.valuationlandarea AS VARCHAR(100))) ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
-        TRIM(CAST(dv.valuationlandarea AS VARCHAR(100))) AS DECIMAL(20, 2)
-    ) END AS land_area_sqft,
-    CASE
-        WHEN TRIM(
-            CAST(
-                dv.valuationlandarearatepersquarefeet AS VARCHAR(100)
-            )
-        ) ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
-            TRIM(
-                CAST(
-                    dv.valuationlandarearatepersquarefeet AS VARCHAR(100)
-                )
-            ) AS DECIMAL(20, 2)
-    ) END AS land_rate_per_sqft,
-    CASE
-        WHEN TRIM(
-            CAST(dv.valuationbuiltupAreaexisting AS VARCHAR(100))
-        ) ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
-            TRIM(
-                CAST(dv.valuationbuiltupAreaexisting AS VARCHAR(100))
-            ) AS DECIMAL(20, 2)
-    ) END AS buildup_existing_sqft,
-    CASE
-        WHEN TRIM(
-            CAST(dv.valuationbuiltupAreaproposed AS VARCHAR(100))
-        ) ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
-            TRIM(
-                CAST(dv.valuationbuiltupAreaproposed AS VARCHAR(100))
-            ) AS DECIMAL(20, 2)
-    ) END AS buildup_proposed_sqft,
-    CASE
-        WHEN TRIM(CAST(dv.valuationsuperbuiltuparea AS VARCHAR(100))) ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
-        TRIM(CAST(dv.valuationsuperbuiltuparea AS VARCHAR(100))) AS DECIMAL(20, 2)
-    ) END AS super_buildup_sqft,
-    CASE
-        WHEN TRIM(
-            REPLACE(CAST(dv.valuationbuilding AS VARCHAR(50)), '%', '')
-        ) ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
-            TRIM(
-                REPLACE(CAST(dv.valuationbuilding AS VARCHAR(50)), '%', '')
-            ) AS DECIMAL(20, 2)
-    ) END AS building_pct,
-    dv.valuationlandarearatepersquarefeet AS buildup_existing_rate_per_sqft,
-    dv.valuationbuiltupareaproposedratepersquarefeet AS buildup_proposed_rate_per_sqft,
-    dv.valuationsuperbuiltuparearatepersquarefeet AS super_buildup_rate_per_sqft,
-    dv.valuationcarpetarea AS carpet_area,
-    dv.valuationcarpetarearatepersquarefeet AS carper_area_rate,
-    CASE
-        WHEN TRIM(
-            REPLACE(
-                CAST(dv.valuationunitbeingfunded AS VARCHAR(50)),
-                '%',
-                ''
-            )
-        ) ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
-            TRIM(
-                REPLACE(
-                    CAST(dv.valuationunitbeingfunded AS VARCHAR(50)),
-                    '%',
-                    ''
-                )
-            ) AS DECIMAL(20, 2)
-    ) END AS unit_funded_pct,
-    --  ATS Rates
-    ladd.landplotrate AS agreement_land_rate_per_sqft,
-    ladd.existingconstructionbuiltuprate AS agreement_buildup_existing_rate_per_sqft,
-    ladd.proposedconstructionbuiltuprate AS agreement_buildup_proposed_rate_per_sqft,
-    ladd.constructionsuperbuiltuprate AS agreement_super_buildup_rate_per_sqft,
-    --  Legal
-    lr.legaldetailstatustypedetailid AS legal_report_status,
-    tf.agencyid AS legal_agency_name,
-    lr.advocatename AS legal_advocate_name,
-    tf.reportreceiveddate AS report_date,
-    TRIM(
-        COALESCE(NULLIF(TRIM(lr.houseno), ''), '') || CASE
-        WHEN NULLIF(TRIM(lr.floorno), '') IS NOT NULL THEN ', ' || TRIM(lr.floorno)
-        ELSE '' END || CASE
-        WHEN NULLIF(TRIM(lr.wingno), '') IS NOT NULL THEN ', ' || TRIM(lr.wingno)
-        ELSE '' END || CASE
-        WHEN NULLIF(TRIM(lr.buildingno), '') IS NOT NULL THEN ', ' || TRIM(lr.buildingno)
-        ELSE '' END || CASE
-        WHEN NULLIF(TRIM(lr.plotno), '') IS NOT NULL THEN ', ' || TRIM(lr.plotno)
-        ELSE '' END || CASE
-        WHEN NULLIF(TRIM(lr.surveyno), '') IS NOT NULL THEN ', ' || TRIM(lr.surveyno)
-        ELSE '' END || CASE
-        WHEN NULLIF(TRIM(lr.streetno), '') IS NOT NULL THEN ', ' || TRIM(lr.streetno)
-        ELSE '' END || CASE
-        WHEN NULLIF(TRIM(lr.stageno), '') IS NOT NULL THEN ', ' || TRIM(lr.stageno)
-        ELSE '' END || CASE
-        WHEN NULLIF(TRIM(lr.landmark), '') IS NOT NULL THEN ', ' || TRIM(lr.landmark)
-        ELSE '' END || CASE
-        WHEN NULLIF(TRIM(lr.village), '') IS NOT NULL THEN ', ' || TRIM(lr.village)
-        ELSE '' END || CASE
-        WHEN NULLIF(TRIM(lr.mouza), '') IS NOT NULL THEN ', ' || TRIM(lr.mouza)
-        ELSE '' END
-    ) AS legal_address,
-    lr.cityid AS legal_city,
-    lr.districtid AS legal_district,
-    lr.stateid AS legal_state,
-    lr.pincode AS legal_pincode,
-    CASE
-    WHEN lr.vendorclearandmarketabletitletypedetailid IS NULL THEN NULL
-    ELSE lr.vendorclearandmarketabletitletypedetailid = '1' END AS title_clear,
-    --  Technical Firing ─
-    tf.reportfiringtypedetailid AS tech_firing_type,
-    ma.agencyname AS tech_agency_name,
-    CAST(tf.firingdate AS DATE) AS tech_firing_date,
-    CAST(tf.reportreceiveddate AS DATE) AS tech_report_received_date,
-    CAST(tr.propertyvisitdate AS DATE) AS tech_visit_date,
-    --  Revised Valuation
-    rp.revisedmarketvalue AS revised_market_value,
-    COALESCE(rp.valuationdate, rp.createdon) AS revised_valuation_date,
-    --  Audit
-    CAST(pd.createdon AS TIMESTAMP) AS record_created_at,
-    CAST(pd.lastmodifiedon AS TIMESTAMP) AS record_modified_at,
-    CAST(GETDATE() AS TIMESTAMP) AS silver_loaded_at,
-    TO_CHAR(GETDATE(), 'YYYYMMDDHH24MISS') AS silver_batch_id
-FROM
-    dmihfclos.tblapplicationpropertydetail pd
-    LEFT JOIN dedup_surrounding ps ON ps.loanapplicationid = pd.loanapplicationid
-    AND ps.rn = 1
-    LEFT JOIN dedup_valuation dv ON dv.loanapplicationid = pd.loanapplicationid
-    AND dv.rn = 1
-    LEFT JOIN dedup_disbursal ladd ON ladd.loanapplicationid = pd.loanapplicationid
-    AND ladd.rn = 1
-    LEFT JOIN dedup_vetting rv ON rv.loanapplicationid = pd.loanapplicationid
-    AND rv.rn = 1
-    LEFT JOIN dedup_legal lr ON lr.loanapplicationid = pd.loanapplicationid
-    AND lr.rn = 1
-    LEFT JOIN dedup_firing tf ON tf.loanapplicationid = pd.loanapplicationid
-    AND tf.rn = 1
-    LEFT JOIN dedup_technical tr ON tr.loanapplicationid = pd.loanapplicationid
-    AND tr.rn = 1
-    LEFT JOIN dedup_revised_val rp ON rp.loanapplicationid = pd.loanapplicationid
-    AND rp.rn = 1
-    LEFT JOIN dmihfclos.mstcity mc ON mc.cityid = pd.cityid
-    AND mc.isactive = 1
-    LEFT JOIN dmihfclos.mstdistrict md ON md.districtid = pd.districtid
-    AND md.isactive = 1
-    LEFT JOIN dmihfclos.mststate ms ON ms.stateid = pd.stateid
-    AND ms.isactive = 1
-    LEFT JOIN dmihfclos.mstagency ma ON ma.agencyid = tf.agencyid
-    AND ma.isactive = 1
-    where  pd.isactive =1 ;
+    CAST(e.employeeid AS BIGINT)   AS employee_id,
+    TRIM(UPPER(e.employeecode))   AS employee_code,
+    TRIM(e.employeename)     AS employee_name,
+    CAST(e.basebranchid AS INT)  AS base_branch_id,
+    mb.branchname      AS base_branch_name,
+    e.departmentid     AS department,
+    e.designationtypedetailid   AS designation,
+    e.designationleveltypedetailid    AS designation_level,
+    CAST(e.parentemployeeid AS INT)    AS parent_employee_id,
+    CAST(e.joiningdate AS DATE)    AS joining_date,
+    CAST(e.relivingdate AS DATE)    AS relieving_date,
+    e.isResigned  AS is_Resigned,
+    CASE WHEN e.isactive = 1 THEN TRUE ELSE FALSE END    AS is_active,
+    e.entityid as entity_id,                            --- ADDED
+
+    la.loans_onboarded_total,
+    la.loans_onboarded_mtd,
+    la.total_disbursed_amount,
+
+    u.userid  AS user_id,                                --- ADDED
+    u.parententityid AS  parent_entity_id,              --- ADDED
+    u.usertypedetailid  AS user_typedetail_id,          --- ADDED
+
+    ub.userbranchid as user_branch_id,                               --- ADDED
+    ub.branchid  as branch_id,                               --- ADDED
+
+
+    pa.active_loan_count,
+    pa.current_book_pos,
+    pa.loans_in_dpd,
+    pa.loans_in_npa,
+    pa.total_arrears_amount,
+    pa.collection_efficiency_pct,
+    pa.dpd_rate_pct,
+    pa.npa_rate_pct,
+
+    CAST(e.createdon AS TIMESTAMP)  AS record_created_at,
+    CAST(e.lastmodifiedon AS TIMESTAMP) AS record_modified_at,
+    CURRENT_TIMESTAMP AS silver_loaded_at,
+    TO_CHAR(GETDATE(),'YYYYMMDD_HH24MISS') AS silver_batch_id
+
+FROM emp_dedup e
+LEFT JOIN loan_agg la
+    ON la.sales_officer_emp_id = e.employeeid
+LEFT JOIN cte_mstbranch mb
+    ON mb.entityid = e.entityid
+LEFT JOIN  dmihfclos.tbluser u
+    on u.entityid = e.entityid and u.isactive=1
+LEFT JOIN dmihfclos.tbluserbranch ub
+    ON ub.userid = u.userid     AND ub.isactive = '1'
+LEFT JOIN portfolio_metrics pa
+ON pa.employee_id = e.employeeid
+
+group by  ub.userid, ub.branchid
