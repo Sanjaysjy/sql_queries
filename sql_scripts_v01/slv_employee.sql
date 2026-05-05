@@ -13,106 +13,53 @@
     WITH dedup_valuation AS (
         SELECT
             *,
-            ROW_NUMBER() OVER (
-                PARTITION BY loanapplicationid
-                ORDER BY
-                    lastmodifiedon DESC
-            ) AS rn
-        FROM
-            dmihfclos.tblloantechnicaldiligencevaluation
-        WHERE
-            isactive = 1
+            ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
+        FROM dmihfclos.tblloantechnicaldiligencevaluation
+        WHERE isactive = 1
     ),
     dedup_disbursal AS (
         SELECT
             *,
-            ROW_NUMBER() OVER (
-                PARTITION BY loanapplicationid
-                ORDER BY
-                    lastmodifiedon DESC
-            ) AS rn
-        FROM
-            dmihfclos.tblloanapplicationdisbursaldetail
-        WHERE
-            isactive = 1
+            ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
+        FROM dmihfclos.tblloanapplicationdisbursaldetail
+        WHERE isactive = 1
     ),
     dedup_vetting AS (
         SELECT
             *,
-            ROW_NUMBER() OVER (
-                PARTITION BY loanapplicationid
-                ORDER BY
-                    lastmodifiedon DESC
-            ) AS rn
-        FROM
-            dmihfclos.tblloantechnicalreportvetting
-        WHERE
-            isactive = 1
+            ROW_NUMBER() OVER ( PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
+        FROM dmihfclos.tblloantechnicalreportvetting WHERE isactive = 1
     ),
     dedup_technical AS (
         SELECT
             *,
-            ROW_NUMBER() OVER (
-                PARTITION BY loanapplicationid
-                ORDER BY
-                    lastmodifiedon DESC
-            ) AS rn
-        FROM
-            dmihfclos.tblloantechnicalreport
-        WHERE
-            isactive = 1
+            ROW_NUMBER() OVER ( PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
+        FROM dmihfclos.tblloantechnicalreport WHERE isactive = 1
     ),
     dedup_legal AS (
         SELECT
             *,
-            ROW_NUMBER() OVER (
-                PARTITION BY loanapplicationid
-                ORDER BY
-                    lastmodifiedon DESC
-            ) AS rn
-        FROM
-            dmihfclos.tblloanlegalreport
-        WHERE
-            isactive = 1
+            ROW_NUMBER() OVER ( PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
+        FROM dmihfclos.tblloanlegalreport WHERE isactive = 1
     ),
     dedup_firing AS (
         SELECT
             *,
-            ROW_NUMBER() OVER (
-                PARTITION BY loanapplicationid
-                ORDER BY
-                    lastmodifiedon DESC
-            ) AS rn
-        FROM
-            dmihfclos.tblloantechnicalfiring
-        WHERE
-            isactive = 1
+            ROW_NUMBER() OVER (PARTITION BY loanapplicationid  ORDER BY  lastmodifiedon DESC) AS rn
+        FROM dmihfclos.tblloantechnicalfiring WHERE isactive = 1
     ),
     dedup_revised_val AS (
         SELECT
             *,
-            ROW_NUMBER() OVER (
-                PARTITION BY loanapplicationid
-                ORDER BY
-                    lastmodifiedon DESC
-            ) AS rn
-        FROM
-            dmihfclos.tblloanrevpropvaluation
-        WHERE
-            isactive = 1
+            ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
+        FROM dmihfclos.tblloanrevpropvaluation  WHERE  isactive = 1
     ),
     dedup_surrounding AS (
         SELECT
             *,
-            ROW_NUMBER() OVER (
-                PARTITION BY loanapplicationid
-                ORDER BY
-                    lastmodifiedon DESC
-            ) AS rn
-        FROM
-            dmihfclos.tblloantechnicalpropertysurrounding
-        WHERE
-            isactive = 1
+            ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
+        FROM dmihfclos.tblloantechnicalpropertysurrounding
+        WHERE isactive = 1
     )
 SELECT
     --  Identifiers
@@ -138,7 +85,6 @@ SELECT
     ms.statename AS property_state,
     CASE WHEN TRIM(CAST(pd.pincode AS VARCHAR(50))) ~ '^[0-9]+$' THEN CAST(TRIM(CAST(pd.pincode AS VARCHAR(50))) AS INT) END AS property_pincode,
     pd.isnegativearea = '1' AS is_negative_area,
-    --  Geo (cleaned lat/long)
     CASE
         WHEN REGEXP_REPLACE(ps.latitude, '[^0-9.\-]', '') ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
             REGEXP_REPLACE(ps.latitude, '[^0-9.\-]', '') AS DECIMAL(20, 8)
@@ -151,7 +97,7 @@ SELECT
         ) * CASE
         WHEN ps.longitude ILIKE '%W%' THEN -1
     ELSE 1 END END AS longitude,
-    --  Technical Address (IMD) ─
+    --  Technical Address
     ps.pacolonyprojectname AS tech_project_name,
     ps.pakhasrasurveyno AS tech_khasra_survey_no,
     CASE
@@ -164,7 +110,6 @@ SELECT
         WHEN TRIM(CAST(pd.propertyareasquareft AS VARCHAR(50))) ~ '^-?[0-9]+$' THEN CAST(
         TRIM(CAST(pd.propertyareasquareft AS VARCHAR(50))) AS DECIMAL(20, 0)
     ) END AS property_area_sqft,
-    -- Shared clean-numeric pattern for VARCHAR money fields:
     CASE
         WHEN REGEXP_REPLACE(pd.agreementvalue, '[^0-9.\-]', '') ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
         REGEXP_REPLACE(pd.agreementvalue, '[^0-9.\-]', '') AS DECIMAL(20, 2)
@@ -177,8 +122,6 @@ SELECT
         WHEN REGEXP_REPLACE(dv.valuationtotalfairmarketvalue, '[^0-9.\-]', '') ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
         REGEXP_REPLACE(dv.valuationtotalfairmarketvalue, '[^0-9.\-]', '') AS DECIMAL(20, 2)
     ) END AS fair_market_value,
-    --  Area & Rate Details ─
-    -- Clean numeric cast helper: TRIM → regex guard → CAST
     CASE
         WHEN TRIM(CAST(dv.valuationlandarea AS VARCHAR(100))) ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
         TRIM(CAST(dv.valuationlandarea AS VARCHAR(100))) AS DECIMAL(20, 2)
