@@ -118,7 +118,7 @@ SELECT
     CAST(e.relivingdate AS DATE)    AS relieving_date,
     e.isResigned  AS is_Resigned,
     CASE WHEN e.isactive = 1 THEN TRUE ELSE FALSE END    AS is_active,
-    e.entityid as entity_id,                            --- ADDED 
+    e.entityid as entity_id,                            --- ADDED
 
     la.loans_onboarded_total,
     la.loans_onboarded_mtd,
@@ -127,6 +127,10 @@ SELECT
     u.userid  AS user_id,                                --- ADDED
     u.parententityid AS  parent_entity_id,              --- ADDED
     u.usertypedetailid  AS user_typedetail_id,          --- ADDED
+
+    ub.userbranchid as user_branch_id,                               --- ADDED
+    ub.branchid  as branch_id,                               --- ADDED
+
 
     pa.active_loan_count,
     pa.current_book_pos,
@@ -148,6 +152,10 @@ LEFT JOIN loan_agg la
 LEFT JOIN cte_mstbranch mb
     ON mb.entityid = e.entityid
 LEFT JOIN  dmihfclos.tbluser u
-    on u.entityid = e.entityid
+    on u.entityid = e.entityid and u.isactive=1
+LEFT JOIN dmihfclos.tbluserbranch ub
+    ON ub.userid = u.userid     AND ub.isactive = '1'
 LEFT JOIN portfolio_metrics pa
 ON pa.employee_id = e.employeeid
+
+group by  ub.userid, ub.branchid

@@ -65,7 +65,7 @@ SELECT
     ps.parentpropertyid AS parent_property_id,
 
     pd.unittypetypedetailid AS unit_type,
-    pd.propertytypedetailid AS property_type,
+    pd.propertytypedetailid AS property_type,     -- need to discuss
     rv.classificationtypedetailid   AS property_classification,
     rv.urbanruraltypedetailid   AS urban_rural,
     pd.ownershiptypedetailid AS ownership_type,
@@ -156,7 +156,6 @@ SELECT
          THEN CAST(TRIM(REPLACE(CAST(dv.valuationbuilding AS VARCHAR(50)), '%', '')) AS DECIMAL(20, 2))
          ELSE NULL END AS building_pct,
 
-             --- no field found
     dv.valuationlandarearatepersquarefeet  AS buildup_existing_rate_per_sqft,
     dv.valuationbuiltupareaproposedratepersquarefeet  AS buildup_proposed_rate_per_sqft,
     dv.valuationsuperbuiltuparearatepersquarefeet  as super_buildup_rate_per_sqft,
