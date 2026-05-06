@@ -1,13 +1,13 @@
 -- Silver Layer: slv_asset
 
--- DROP TABLE IF EXISTS silver.slv_asset;
+DROP TABLE IF EXISTS silver.slv_asset;
 
 
--- CREATE TABLE silver.slv_asset
--- DISTKEY
---     (loan_application_id)
--- SORTKEY
---     (property_detail_id, loan_application_id) AS
+CREATE TABLE silver.slv_asset
+DISTKEY
+    (loan_application_id)
+SORTKEY
+    (property_detail_id, loan_application_id) AS
 
 
     WITH dedup_valuation AS (
@@ -28,31 +28,36 @@
         SELECT
             *,
             ROW_NUMBER() OVER ( PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
-        FROM dmihfclos.tblloantechnicalreportvetting WHERE isactive = 1
+        FROM dmihfclos.tblloantechnicalreportvetting
+    WHERE isactive = 1
     ),
     dedup_technical AS (
         SELECT
             *,
             ROW_NUMBER() OVER ( PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
-        FROM dmihfclos.tblloantechnicalreport WHERE isactive = 1
+        FROM dmihfclos.tblloantechnicalreport
+    WHERE isactive = 1
     ),
     dedup_legal AS (
         SELECT
             *,
             ROW_NUMBER() OVER ( PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
-        FROM dmihfclos.tblloanlegalreport WHERE isactive = 1
+        FROM dmihfclos.tblloanlegalreport
+    WHERE isactive = 1
     ),
     dedup_firing AS (
         SELECT
             *,
             ROW_NUMBER() OVER (PARTITION BY loanapplicationid  ORDER BY  lastmodifiedon DESC) AS rn
-        FROM dmihfclos.tblloantechnicalfiring WHERE isactive = 1
+        FROM dmihfclos.tblloantechnicalfiring
+    WHERE isactive = 1
     ),
     dedup_revised_val AS (
         SELECT
             *,
             ROW_NUMBER() OVER (PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
-        FROM dmihfclos.tblloanrevpropvaluation  WHERE  isactive = 1
+        FROM dmihfclos.tblloanrevpropvaluation
+    WHERE  isactive = 1
     ),
     dedup_surrounding AS (
         SELECT
@@ -67,42 +72,84 @@ SELECT
     pd.loanapplicationid AS loan_application_id,
     ps.parentpropertyid AS parent_property_id,
     --  Property Type
-    pd.unittypetypedetailid AS unit_type,
-    pd.propertytypedetailid AS property_type,
-    rv.classificationtypedetailid AS property_classification,
-    rv.urbanruraltypedetailid AS urban_rural,
-    pd.ownershiptypedetailid AS ownership_type,
-    pd.natureofpropertytransactiontypedetailid AS nature_of_transaction,
-    rv.transitiontypedetailid AS transaction_type,
-    pd.endusetypedetailid AS end_use,
-    pd.propertydocumenttypedetailid AS property_document_type,
-    pd.alreadyownedpropertytypedetailid AS already_owned_property,
+    unittype.typeDetailDescription AS unit_type,
+    pd.unittypetypedetailid AS unit_type_typedetailid,
+    property.typeDetailDescription AS property_type,
+    pd.propertytypedetailid AS property_type_typedetailid,
+    classification.typeDetailDescription AS property_classification,
+    rv.classificationtypedetailid AS property_classification_typedetailid,
+    urbanrural.typeDetailDescription AS urban_rural,
+    rv.urbanruraltypedetailid AS urban_rural_typedetailid,
+    ownership.typeDetailDescription AS ownership_type,
+    pd.ownershiptypedetailid AS ownership_type_typedetailid,
+    natureofproperty.typeDetailDescription AS nature_of_transaction,
+    pd.natureofpropertytransactiontypedetailid AS nature_of_transaction_typedetailid,
+    transition.typeDetailDescription AS transaction_type,
+    rv.transitiontypedetailid AS transaction_type_typedetailid,
+    enduse.typeDetailDescription AS end_use,
+    pd.endusetypedetailid AS end_use_typedetailid,
+    propertydocument.typeDetailDescription AS property_document_type,
+    pd.propertydocumenttypedetailid AS property_document_type_typedetailid,
+    alreadyowned.typeDetailDescription AS already_owned_property,
+    pd.alreadyownedpropertytypedetailid AS already_owned_property_typedetailid,
     CASE WHEN pd.isfirstproperty = '1' THEN TRUE ELSE FALSE END AS is_first_property,
     --  Location ─
-    TRIM(pd.propertyaddress) AS property_address,
-    mc.cityname AS property_city,
-    md.districtname AS property_district,
-    ms.statename AS property_state,
-    CASE WHEN TRIM(CAST(pd.pincode AS VARCHAR(50))) ~ '^[0-9]+$' THEN CAST(TRIM(CAST(pd.pincode AS VARCHAR(50))) AS INT) END AS property_pincode,
+    coalesce(case when ps.technicaladdress is not null and ps.technicaladdress != 0 then ps.technicaladdress else  (coalesce(pd.propertyaddress , '')  || ' ' ||  (coalesce(pd.landmark, '') )) end )AS property_address,
+
+  coalesce(case when ps.technicaladdress is not null and ps.technicaladdress != 0 then tbl_city.cityname else  mc.cityname  end ) AS property_city,
+    coalesce(case when ps.technicaladdress is not null and ps.technicaladdress != 0 then ps.pacitytehsiltalukatownid else  mc.cityid  end ) AS property_city_id,
+
+  coalesce(case when ps.technicaladdress is not null and ps.technicaladdress != 0 then tbl_dist.districtname else  md.districtname  end ) AS property_district,
+    coalesce(case when ps.technicaladdress is not null and ps.technicaladdress != 0 then ps.padistrictid else  mc.districtid  end ) AS property_distict_id,
+
+
+  coalesce(case when ps.technicaladdress is not null and ps.technicaladdress != 0 then tbl_state.statename else  ms.statename   end ) AS property_state,
+    coalesce(case when ps.technicaladdress is not null and ps.technicaladdress != 0 then ps.padistrictid else  ms.stateid  end ) AS property_state_id,
+
+    coalesce(
+        case
+            when ps.technicaladdress is not null and ps.technicaladdress != 0
+            then
+                CASE
+                    WHEN TRIM(ps.papincode) ~ '^[0-9]+$'
+                    THEN CAST(TRIM(ps.papincode) AS INT)
+                END
+            else
+                (CASE
+                    WHEN TRIM(CAST(pd.pincode AS VARCHAR(50))) ~ '^[0-9]+$'
+                    THEN CAST(TRIM(CAST(pd.pincode AS VARCHAR(50))) AS INT)
+                END)
+        end
+    ) AS property_pincode,
     pd.isnegativearea = '1' AS is_negative_area,
     CASE
-        WHEN REGEXP_REPLACE(ps.latitude, '[^0-9.\-]', '') ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
-            REGEXP_REPLACE(ps.latitude, '[^0-9.\-]', '') AS DECIMAL(20, 8)
-        ) * CASE
-        WHEN ps.latitude ILIKE '%S%' THEN -1
-    ELSE 1 END END AS latitude,
+        WHEN REGEXP_REPLACE(ps.latitude, '[^0-9.\-]', '') ~ '^-?[0-9]+(\.[0-9]+)?$'
+        THEN
+            CAST(REGEXP_REPLACE(ps.latitude, '[^0-9.\-]', '') AS DECIMAL(20, 8))
+            * (
+                CASE
+                    WHEN ps.latitude ILIKE '%S%' THEN -1
+                    ELSE 1
+                END
+            )
+    END AS latitude,
     CASE
-        WHEN REGEXP_REPLACE(ps.longitude, '[^0-9.\-]', '') ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
-            REGEXP_REPLACE(ps.longitude, '[^0-9.\-]', '') AS DECIMAL(20, 8)
-        ) * CASE
-        WHEN ps.longitude ILIKE '%W%' THEN -1
-    ELSE 1 END END AS longitude,
+        WHEN REGEXP_REPLACE(ps.longitude, '[^0-9.\-]', '') ~ '^-?[0-9]+(\.[0-9]+)?$'
+        THEN
+            CAST(REGEXP_REPLACE(ps.longitude, '[^0-9.\-]', '') AS DECIMAL(20, 8))
+            * (
+                CASE
+                    WHEN ps.longitude ILIKE '%W%' THEN -1
+                    ELSE 1
+                END
+            )
+    END AS longitude,
     --  Technical Address
     ps.pacolonyprojectname AS tech_project_name,
     ps.pakhasrasurveyno AS tech_khasra_survey_no,
     CASE
-        WHEN ps.isitselfoccupiedpropertybyapplicanttypedetailid IS NULL THEN NULL
-        ELSE ps.isitselfoccupiedpropertybyapplicanttypedetailid = '1'
+        WHEN isitself.typeDetailDescription IS NULL THEN NULL
+        ELSE isitself.typeDetailDescription = '1'
     END AS is_self_occupied,
     dv.iscompliantwithndmaguidelines = '1' AS is_ndma_compliant,
     --  Valuation
@@ -111,8 +158,8 @@ SELECT
         TRIM(CAST(pd.propertyareasquareft AS VARCHAR(50))) AS DECIMAL(20, 0)
     ) END AS property_area_sqft,
     CASE
-        WHEN REGEXP_REPLACE(pd.agreementvalue, '[^0-9.\-]', '') ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
-        REGEXP_REPLACE(pd.agreementvalue, '[^0-9.\-]', '') AS DECIMAL(20, 2)
+        WHEN REGEXP_REPLACE(ladd.documentvalue, '[^0-9.\-]', '') ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
+        REGEXP_REPLACE(ladd.documentvalue, '[^0-9.\-]', '') AS DECIMAL(20, 2)
     ) END AS agreement_value,
     CASE
         WHEN REGEXP_REPLACE(pd.mvofproperty, '[^0-9.\-]', '') ~ '^-?[0-9]+(\.[0-9]+)?$' THEN CAST(
@@ -193,7 +240,8 @@ SELECT
     ladd.proposedconstructionbuiltuprate AS agreement_buildup_proposed_rate_per_sqft,
     ladd.constructionsuperbuiltuprate AS agreement_super_buildup_rate_per_sqft,
     --  Legal
-    lr.legaldetailstatustypedetailid AS legal_report_status,
+    legaldetail.typeDetailDescription AS legal_report_status,
+    lr.legaldetailstatustypedetailid AS legal_report_status_typedetailid,
     tf.agencyid AS legal_agency_name,
     lr.advocatename AS legal_advocate_name,
     tf.reportreceiveddate AS report_date,
@@ -220,15 +268,17 @@ SELECT
         WHEN NULLIF(TRIM(lr.mouza), '') IS NOT NULL THEN ', ' || TRIM(lr.mouza)
         ELSE '' END
     ) AS legal_address,
+--       add description to the id columns
     lr.cityid AS legal_city,
     lr.districtid AS legal_district,
     lr.stateid AS legal_state,
     lr.pincode AS legal_pincode,
     CASE
-    WHEN lr.vendorclearandmarketabletitletypedetailid IS NULL THEN NULL
-    ELSE lr.vendorclearandmarketabletitletypedetailid = '1' END AS title_clear,
+    WHEN vendor.typeDetailDescription IS NULL THEN NULL
+    ELSE vendor.typeDetailDescription = '1' END AS title_clear,
     --  Technical Firing ─
-    tf.reportfiringtypedetailid AS tech_firing_type,
+    reportfiring.typeDetailDescription AS tech_firing_type,
+    tf.reportfiringtypedetailid AS tech_firing_type_typedetailid,
     ma.agencyname AS tech_agency_name,
     CAST(tf.firingdate AS DATE) AS tech_firing_date,
     CAST(tf.reportreceiveddate AS DATE) AS tech_report_received_date,
@@ -267,4 +317,24 @@ FROM
     AND ms.isactive = 1
     LEFT JOIN dmihfclos.mstagency ma ON ma.agencyid = tf.agencyid
     AND ma.isactive = 1
-    where  pd.isactive =1 ;
+
+    left join  dmihfclos.mstcity tbl_city      ON  tbl_city.cityid  = ps.pacitytehsiltalukatownid  and tbl_city.isactive =1
+    LEFT JOIN dmihfclos.mstdistrict tbl_dist    ON tbl_dist.districtid = ps.padistrictid  and tbl_dist.isactive =1
+    left join  dmihfclos.mststate tbl_state        ON  tbl_state.stateid  = ps.pastateid  and tbl_state.isactive =1
+
+        LEFT JOIN dmihfclos.tblTypeDetail unittype    ON  unittype.typeDetailID = pd.unittypetypedetailid
+        LEFT JOIN dmihfclos.tblTypeDetail property    ON  property.typeDetailID = pd.propertytypedetailid
+        LEFT JOIN dmihfclos.tblTypeDetail classification    ON  classification.typeDetailID = rv.classificationtypedetailid
+        LEFT JOIN dmihfclos.tblTypeDetail urbanrural    ON  urbanrural.typeDetailID = rv.urbanruraltypedetailid
+        LEFT JOIN dmihfclos.tblTypeDetail ownership    ON  ownership.typeDetailID = pd.ownershiptypedetailid
+        LEFT JOIN dmihfclos.tblTypeDetail natureofproperty    ON  natureofproperty.typeDetailID = pd.natureofpropertytransactiontypedetailid
+        LEFT JOIN dmihfclos.tblTypeDetail transition    ON  transition.typeDetailID = rv.transitiontypedetailid
+        LEFT JOIN dmihfclos.tblTypeDetail enduse    ON  enduse.typeDetailID = pd.endusetypedetailid
+        LEFT JOIN dmihfclos.tblTypeDetail propertydocument    ON  propertydocument.typeDetailID = pd.propertydocumenttypedetailid
+        LEFT JOIN dmihfclos.tblTypeDetail alreadyowned    ON  alreadyowned.typeDetailID = pd.alreadyownedpropertytypedetailid
+        LEFT JOIN dmihfclos.tblTypeDetail isitself    ON  isitself.typeDetailID = ps.isitselfoccupiedpropertybyapplicanttypedetailid
+        LEFT JOIN dmihfclos.tblTypeDetail legaldetail    ON  legaldetail.typeDetailID = lr.legaldetailstatustypedetailid
+        LEFT JOIN dmihfclos.tblTypeDetail reportfiring    ON  reportfiring.typeDetailID =  tf.reportfiringtypedetailid
+        LEFT JOIN dmihfclos.tblTypeDetail vendor    ON  vendor.typeDetailID = lr.vendorclearandmarketabletitletypedetailid
+
+    where  pd.isactive =1
