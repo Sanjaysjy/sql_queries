@@ -104,7 +104,7 @@ SELECT
 
 
   coalesce(case when ps.technicaladdress is not null and ps.technicaladdress != 0 then tbl_state.statename else  ms.statename   end ) AS property_state,
-    coalesce(case when ps.technicaladdress is not null and ps.technicaladdress != 0 then ps.padistrictid else  ms.stateid  end ) AS property_state_id,
+    coalesce(case when ps.technicaladdress is not null and ps.technicaladdress != 0 then ps.pastateid else  ms.stateid  end ) AS property_state_id,
 
     coalesce(
         case
