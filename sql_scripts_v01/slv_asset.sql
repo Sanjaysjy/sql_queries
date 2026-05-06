@@ -45,6 +45,13 @@ SORTKEY
         FROM dmihfclos.tblloanlegalreport
     WHERE isactive = 1
     ),
+    dedup_legal_firing AS (
+        SELECT
+            *,
+            ROW_NUMBER() OVER ( PARTITION BY loanapplicationid ORDER BY lastmodifiedon DESC) AS rn
+        FROM dmihfclos.tblloanlegalfiring
+    WHERE isactive = 1
+    ),
     dedup_firing AS (
         SELECT
             *,
@@ -244,6 +251,7 @@ SELECT
     lr.legaldetailstatustypedetailid AS legal_report_status_typedetailid,
     tf.agencyid AS legal_agency_name,
     lr.advocatename AS legal_advocate_name,
+    lf.reportreceiveddate  as legal_report_date,
     tf.reportreceiveddate AS report_date,
     TRIM(
         COALESCE(NULLIF(TRIM(lr.houseno), ''), '') || CASE
@@ -305,6 +313,8 @@ FROM
     AND lr.rn = 1
     LEFT JOIN dedup_firing tf ON tf.loanapplicationid = pd.loanapplicationid
     AND tf.rn = 1
+    LEFT JOIN dedup_legal_firing lf ON lf.loanapplicationid = pd.loanapplicationid
+    AND lf.rn = 1
     LEFT JOIN dedup_technical tr ON tr.loanapplicationid = pd.loanapplicationid
     AND tr.rn = 1
     LEFT JOIN dedup_revised_val rp ON rp.loanapplicationid = pd.loanapplicationid
@@ -317,6 +327,8 @@ FROM
     AND ms.isactive = 1
     LEFT JOIN dmihfclos.mstagency ma ON ma.agencyid = tf.agencyid
     AND ma.isactive = 1
+
+
 
     left join  dmihfclos.mstcity tbl_city      ON  tbl_city.cityid  = ps.pacitytehsiltalukatownid  and tbl_city.isactive =1
     LEFT JOIN dmihfclos.mstdistrict tbl_dist    ON tbl_dist.districtid = ps.padistrictid  and tbl_dist.isactive =1
