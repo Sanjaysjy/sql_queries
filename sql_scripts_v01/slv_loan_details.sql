@@ -1,11 +1,11 @@
 -- slv_loan_details
--- DROP TABLE IF EXISTS silver.slv_loan_details;
---
--- CREATE TABLE silver.slv_loan_details
--- DISTSTYLE KEY
--- DISTKEY (loan_application_id)
--- SORTKEY (loan_application_id)
--- AS
+DROP TABLE IF EXISTS silver.slv_loan_details;
+
+CREATE TABLE silver.slv_loan_details
+DISTSTYLE KEY
+DISTKEY (loan_application_id)
+SORTKEY (loan_application_id)
+AS
 
 WITH
 reschedule_latest AS (
@@ -214,6 +214,7 @@ LoanApplicationDetails AS (
 
     LEFT JOIN cte_acceptance acc
         ON acc.loanapplicationid = la.loanapplicationid
+where la.isactive =1
 ),
 
 RuleEngineResponse AS (
@@ -257,7 +258,7 @@ LoanApplicationWaiver AS (
     LEFT JOIN dmihfclos.tblLoanApplicationWaiver w
         ON la.loanApplicationID = w.loanApplicationID
     WHERE la.isActive = 1
-    AND w.isActive = 1  /* additional Check (to discuss) */ 
+    AND w.isActive = 1  /* additional Check (to discuss) */
 ),
 
 LoanApplicationSummary AS (
@@ -539,7 +540,7 @@ LEFT JOIN LoanApplicationAdditionalDetail lad
     ON ls.loan_application_id = lad.loan_application_id
 
 left join dmihfclos.tblloanduestatus  lds
-        ON lds.loanapplicationid = ls.loan_application_id
+        ON lds.loanapplicationid = ls.loan_application_id  and lds.isactive=1
 
 LEFT JOIN roi_spread rs
     ON ls.loan_application_id = rs.loan_application_id
@@ -561,3 +562,4 @@ LEFT JOIN tvr_Details tvr
 
 LEFT JOIN audit_details ad
     ON ls.loan_application_id = ad.loan_application_id
+
