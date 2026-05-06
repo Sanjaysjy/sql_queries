@@ -54,10 +54,11 @@ SORTKEY
     ),
     dedup_firing AS (
         SELECT
-            *,
-            ROW_NUMBER() OVER (PARTITION BY loanapplicationid  ORDER BY  lastmodifiedon DESC) AS rn
-        FROM dmihfclos.tblloantechnicalfiring
-    WHERE isactive = 1
+            firing.*,
+            ROW_NUMBER() OVER (PARTITION BY firing.loanapplicationid  ORDER BY  firing.lastmodifiedon DESC) AS rn
+        FROM dmihfclos.tblloantechnicalfiring  firing
+        inner join dmihfclos.tblloantechnicalreportvetting report_v  on firing.loanApplicationID =report_v.loanApplicationID and firing.isActive = 1 and firing.loanTechnicalFiringID = report_v.loanTechnicalFiringID
+    and  report_v.isactive = 1
     ),
     dedup_revised_val AS (
         SELECT
@@ -249,10 +250,13 @@ SELECT
     --  Legal
     legaldetail.typeDetailDescription AS legal_report_status,
     lr.legaldetailstatustypedetailid AS legal_report_status_typedetailid,
-    tf.agencyid AS legal_agency_name,
+    -- tech_firing_type   --- to add
+    tf.agencyid AS tech_agency_id,   -- if  internal then emp_code and emp_name concat and coal
+    -- tf.tech_agency_name
     lr.advocatename AS legal_advocate_name,
     lf.reportreceiveddate  as legal_report_date,
-    lf.agencyid  as legal_agency_id,
+    -- legal_firing_type  -- to add
+    lf.agencyid  as legal_agency_id,   -- if  internal then emp_code and emp_name concat and coal
     tbl_agency.agencyname  as legal_agency_name,
     lf.legalfiringstatustypedetailid  as legal_firing_status_typedetailid,
     legalfiringstat.typeDetailDescription  as legal_firing_status_description,
@@ -360,7 +364,6 @@ FROM
         LEFT JOIN dmihfclos.tblTypeDetail vendor    ON  vendor.typeDetailID = lr.vendorclearandmarketabletitletypedetailid
 
         LEFT JOIN dmihfclos.tblTypeDetail legalfiringstat    ON  legalfiringstat.typeDetailID = lf.legalfiringstatustypedetailid
-
 
 
     where  pd.isactive =1
