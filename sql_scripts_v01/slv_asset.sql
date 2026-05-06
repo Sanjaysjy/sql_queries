@@ -252,6 +252,15 @@ SELECT
     tf.agencyid AS legal_agency_name,
     lr.advocatename AS legal_advocate_name,
     lf.reportreceiveddate  as legal_report_date,
+    lf.agencyid  as legal_agency_id,
+    tbl_agency.agencyname  as legal_agency_name,
+    lf.legalfiringstatustypedetailid  as legal_firing_status_typedetailid,
+    legalfiringstat.typeDetailDescription  as legal_firing_status_description,
+    lf.firingdate as legal_firing_date,
+    lf.reportreceiveddate  as legal_report_received_date,
+    lf.isrefire as legal_is_refire,
+    lf.isrefiringdate  as legal_is_refiring_date,
+
     tf.reportreceiveddate AS report_date,
     TRIM(
         COALESCE(NULLIF(TRIM(lr.houseno), ''), '') || CASE
@@ -333,6 +342,7 @@ FROM
     left join  dmihfclos.mstcity tbl_city      ON  tbl_city.cityid  = ps.pacitytehsiltalukatownid  and tbl_city.isactive =1
     LEFT JOIN dmihfclos.mstdistrict tbl_dist    ON tbl_dist.districtid = ps.padistrictid  and tbl_dist.isactive =1
     left join  dmihfclos.mststate tbl_state        ON  tbl_state.stateid  = ps.pastateid  and tbl_state.isactive =1
+    left join  dmihfclos.mstagency tbl_agency       ON  tbl_agency.agencyid  = lf.agencyid  and tbl_agency.isactive =1
 
         LEFT JOIN dmihfclos.tblTypeDetail unittype    ON  unittype.typeDetailID = pd.unittypetypedetailid
         LEFT JOIN dmihfclos.tblTypeDetail property    ON  property.typeDetailID = pd.propertytypedetailid
@@ -348,5 +358,9 @@ FROM
         LEFT JOIN dmihfclos.tblTypeDetail legaldetail    ON  legaldetail.typeDetailID = lr.legaldetailstatustypedetailid
         LEFT JOIN dmihfclos.tblTypeDetail reportfiring    ON  reportfiring.typeDetailID =  tf.reportfiringtypedetailid
         LEFT JOIN dmihfclos.tblTypeDetail vendor    ON  vendor.typeDetailID = lr.vendorclearandmarketabletitletypedetailid
+
+        LEFT JOIN dmihfclos.tblTypeDetail legalfiringstat    ON  legalfiringstat.typeDetailID = lf.legalfiringstatustypedetailid
+
+
 
     where  pd.isactive =1
