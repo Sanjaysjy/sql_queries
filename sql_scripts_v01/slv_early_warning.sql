@@ -6,6 +6,7 @@
 -- DISTKEY(loan_application_id)
 -- SORTKEY(loan_application_id, signal_date)
 -- AS
+
 WITH  dpd_ranked AS (
     SELECT
         loan_application_id,
@@ -318,10 +319,11 @@ SELECT
     signal_date,
 
     -- Repayment signals
-    -- consecutive_bounces,    --  source column unavailable
+    -- consecutive_bounces,    --  source column unavailable in repayment slv table add and pull here -- create a cte for this  count(((  -- tbl oan appl pay schedule-.. pay schedule id ,, mapp it with --> tbl loan appli charge details ,,, pay schedu id column ,, with a condition --> typedetails charge _id =1  and charge for typew detail id =1561  and is active =1
     dpd_trend_direction, -- Worsening/Stable/Improving
+
     -- emi_increase_stress,    -- current_emi not in slv_loan_details DDL
-    -- ltv_breach_flag,        --  currentLTV/ltvNorm not in source DDL
+    -- ltv_breach_flag,        --  currentLTV/ltvNorm not in source DDL  --> pos / coal(latest value , market value)  decimal  .2    -->> case for this on condition
 
     -- Collateral signals
     negative_area_flag, -- Property in negative area
@@ -368,7 +370,7 @@ SELECT
             THEN 'No action required. Standard monitoring applies. Flag for collateral re-valuation.'
         ELSE 'No action required. Standard monitoring applies.'
     END AS recommended_action,
-    ews_indicators, -- Semicolon-separated active flags
+    ews_indicators,
     -- Audit columns
     SYSDATE AS gold_loaded_at,
     TO_CHAR(SYSDATE, 'YYYYMMDD_HH24MISS') AS gold_batch_id,
