@@ -123,3 +123,8 @@ LEFT JOIN manual_receipt mr
     ON  ps.loanapplicationid = mr.loanApplicationID
 WHERE ps.rn = 1
 
+
+
+-- hw many checks pre
+-- reciet id
+--re pay beh5

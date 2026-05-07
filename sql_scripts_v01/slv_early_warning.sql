@@ -42,7 +42,7 @@ customer_ranked AS (
         loan_application_id,
         entity_id,
         ROW_NUMBER() OVER ( PARTITION BY loan_application_id
-                ORDER BY CASE WHEN is_main_applicant = TRUE THEN 0 ELSE 1 END,record_modified_at DESC) AS rn
+                ORDER BY CASE WHEN is_main_applicant = 'true'  THEN 0 ELSE 1  END,record_modified_at DESC) AS rn
     FROM silver.slv_customer
 ),
 customer_dedup AS (
@@ -85,13 +85,12 @@ cte_non_starter AS (
     FROM silver.slv_loan_details        la
     JOIN silver.slv_repayment_behavior  rb
         ON la.loan_application_id = rb.loan_application_id
-    JOIN silver.slv_loan_due_status     lds
-        ON la.loan_application_id = lds.loan_application_id
-    WHERE la.status_type_detail_id = 189 -- active loan
+    JOIN dmihfclos.tblloanduestatus     lds
+        ON la.loan_application_id = lds.loanapplicationid
+    WHERE la.loanstatus_typedetail_id= 189 -- active loan
       AND (rb.payment_received_date IS NULL) -- no payment received
-      AND (rb.clearance_flag IS NULL
-           OR rb.clearance_flag = FALSE) -- no clearance
-      AND lds.delinquency_bkt_detail_id IN (2570, 2571, 2572)  -- SMA-1, SMA-2, NPA
+      AND  (rb.is_overdue IS NULL OR rb.is_overdue = FALSE)  -- no clearance
+      AND lds.deliquencybktdetailid IN (2570, 2571, 2572)  -- SMA-1, SMA-2, NPA
     GROUP BY la.loan_application_id
 ),
 
@@ -101,10 +100,10 @@ cte_active_sma2 AS (
         la.loan_application_id,
         TRUE AS active_sma2_flag
     FROM silver.slv_loan_details    la
-    JOIN silver.slv_loan_due_status lds
-        ON la.loan_application_id = lds.loan_application_id
-    WHERE la.status_type_detail_id = 189          -- active loan
-      AND lds.delinquency_bkt_detail_id = 2571    -- SMA-2
+    JOIN dmihfclos.tblloanduestatus lds
+        ON la.loan_application_id = lds.loanapplicationid
+    WHERE la.loanstatus_typedetail_id= 189          -- active loan
+      AND lds.deliquencybktdetailid = 2571    -- SMA-2
     GROUP BY la.loan_application_id
 ),
 
@@ -114,15 +113,17 @@ cte_ach_not_registered AS (
         la.loan_application_id,
         TRUE AS ach_not_registered_sma1_flag
     FROM silver.slv_loan_details    la
-    JOIN silver.slv_loan_ach        ach
-        ON la.loan_application_id = ach.loan_application_id
-    JOIN silver.slv_loan_due_status lds
-        ON la.loan_application_id = lds.loan_application_id
-    WHERE la.status_type_detail_id = 189
-      AND (ach.registered IS NULL OR ach.registered = FALSE)
-      AND (ach.registered_status_type_detail_id IS NULL
-           OR ach.registered_status_type_detail_id <> 1991)
-      AND lds.delinquency_bkt_detail_id IN (2570, 2571, 2572)  -- SMA-1, SMA-2, NPA
+    JOIN  dmihfclos.tblLoanApplicationACH    ach
+        ON la.loan_application_id = ach.loanapplicationid
+    JOIN dmihfclos.tblloanduestatus lds
+        ON la.loan_application_id = lds.loanapplicationid
+    WHERE la.loanstatus_typedetail_id= 189
+        AND (
+           ach.registered IS NULL
+        OR ach.registered = 0
+        )      AND (ach.registeredstatustypedetailid IS NULL
+           OR ach.registeredstatustypedetailid <> 1991)
+      AND lds.deliquencybktdetailid IN (2570, 2571, 2572)  -- SMA-1, SMA-2, NPA
     GROUP BY la.loan_application_id
 ),
 
@@ -132,17 +133,15 @@ cte_construction_delay AS (
         la.loan_application_id,
         TRUE AS construction_delay_sma1_flag
     FROM silver.slv_loan_details    la
-    JOIN silver.slv_loan_due_status lds
-        ON la.loan_application_id = lds.loan_application_id
-    WHERE la.status_type_detail_id = 189
-      AND la.loan_purpose_code IN ('PCBUILDER', 'RENOVATION', 'PLOTCONSTRUCTION')
+    JOIN dmihfclos.tblloanduestatus lds
+        ON la.loan_application_id = lds.loanapplicationid
+    WHERE la.loanstatus_typedetail_id= 189
+    --   AND la.loan_purpose_id IN (1801  )          --('PCBUILDER', 'RENOVATION', 'PLOTCONSTRUCTION')
 
-      AND la.first_disbursement_date <= ADD_MONTHS(CURRENT_DATE, -18)
-
-      AND la.is_fully_disbursed = FALSE
-
-      AND la.disbursement_tranche_count = 1
-      AND lds.delinquency_bkt_detail_id = 2570    -- SMA-1
+      AND la.first_disbursal_date <= ADD_MONTHS(CURRENT_DATE, -18)
+    --   AND la.is_Actually_Fully_Disbursed = 0
+    --   AND total_disbursed_amount = first_disbursed_amount
+      AND lds.deliquencybktdetailid = 2570    -- SMA-1
     GROUP BY la.loan_application_id
 ),
 
@@ -152,16 +151,16 @@ cte_title_doc_delay AS (
         la.loan_application_id,
         TRUE AS title_doc_delay_flag
     FROM silver.slv_loan_details       la
-    JOIN silver.slv_loan_legal_docs    lld
-        ON la.loan_application_id = lld.loan_application_id
-    WHERE la.status_type_detail_id = 189
-      AND lld.document_id IN (1, 3, 16, 70, 81, 118, 130, 209)
-      AND lld.document_category_detail_id = 3256
-      AND lld.document_type_detail_id     = 1957
-      AND (lld.document_status_type_detail_id IS NULL
-           OR lld.document_status_type_detail_id NOT IN (1948, 1949, 1951))
+    JOIN dmihfclos.tblLoanLegalDocuments    lld
+        ON la.loan_application_id = lld.loanapplicationid
+    WHERE la.loanstatus_typedetail_id= 189
+      AND lld.documentid IN (1, 3, 16, 70, 81, 118, 130, 209)
+      AND lld.documentcategorydetailid = 3256
+      AND lld.documenttypedetailid     = 1957
+      AND (lld.documentstatustypedetailid IS NULL
+           OR lld.documentstatustypedetailid NOT IN (1948, 1949, 1951))
 
-      AND la.first_disbursement_date <= ADD_MONTHS(CURRENT_DATE, -3)
+      AND la.first_disbursal_date <= ADD_MONTHS(CURRENT_DATE, -3)
     GROUP BY la.loan_application_id
 ),
 
@@ -171,22 +170,22 @@ cte_bounce_fy AS (
         la.loan_application_id,
         TRUE AS bounce_fy_sma1_flag
     FROM silver.slv_loan_details          la
-    JOIN silver.slv_loan_charge_details   lcd
-        ON la.loan_application_id = lcd.loan_application_id
-    JOIN silver.slv_loan_due_status       lds
-        ON la.loan_application_id = lds.loan_application_id
-    WHERE la.status_type_detail_id       = 189
-      AND lcd.charges_for_type_detail_id = 1561   -- bounce charge
-      AND lcd.type_detail_charge_id      = 1
+    JOIN dmihfclos.tblLoanApplicationChargeDetails   lcd
+        ON la.loan_application_id = lcd.loanapplicationid
+    JOIN dmihfclos.tblloanduestatus       lds
+        ON la.loan_application_id = lds.loanapplicationid
+    WHERE la.loanstatus_typedetail_id      = 189
+      AND lcd.chargesfortypedetailid = 1561   -- bounce charge
+      AND lcd.typedetailchargeid      = 1
 
-      AND lcd.charge_date >= CASE
+      AND lcd.chargedate >= CASE
               WHEN EXTRACT(MONTH FROM CURRENT_DATE) >= 4
               THEN DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '3 months'
               ELSE DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '9 months'
           END
-      AND lds.delinquency_bkt_detail_id = 2570    -- SMA-1
+      AND lds.deliquencybktdetailid = 2570    -- SMA-1
     GROUP BY la.loan_application_id
-    HAVING COUNT(lcd.charge_date) > 3
+    HAVING COUNT(lcd.chargedate) > 3
 ),
 
 cte_base AS (
@@ -314,12 +313,12 @@ cte_scored AS (
 )
 
 SELECT
-    ROW_NUMBER() OVER (ORDER BY loan_application_id, signal_date) AS ews_id,
+    ROW_NUMBER() OVER (ORDER BY loan_application_id) AS ews_id,
     loan_application_id,
     signal_date,
 
     -- Repayment signals
-    -- consecutive_bounces,    --  source column unavailable in repayment slv table add and pull here -- create a cte for this  count(((  -- tbl oan appl pay schedule-.. pay schedule id ,, mapp it with --> tbl loan appli charge details ,,, pay schedu id column ,, with a condition --> typedetails charge _id =1  and charge for typew detail id =1561  and is active =1
+    -- consecutive_bounces, --- more than 3 bounce    --  source column unavailable in repayment slv table add and pull here -- create a cte for this  count(((  -- tbl oan appl pay schedule-.. pay schedule id ,, mapp it with --> tbl loan appli charge details ,,, pay schedu id column ,, with a condition --> typedetails charge _id =1  and charge for typew detail id =1561  and is active =1
     dpd_trend_direction, -- Worsening/Stable/Improving
 
     -- emi_increase_stress,    -- current_emi not in slv_loan_details DDL
