@@ -17,7 +17,13 @@ AS
   SELECT
     lm.loanMonthlyID AS loan_monthly_id,
     lm.loanApplicationID AS loan_application_id,
-    DATE(MAX(lm.transactionDate) OVER (PARTITION BY lm.loanMonthlyID)) AS snapshot_date,
+
+    TO_DATE(
+        lm.summaryyear || '-' ||
+        LPAD(lm.summarymonth::VARCHAR, 2, '0') || '-01',  --  last date for this not 01
+        'YYYY-MM-DD'
+    ) AS snapshot_date,
+--    DATE(MAX(lm.transactionDate) OVER (PARTITION BY lm.loanMonthlyID)) AS snapshot_date,   -- this is wrong doesn't even has the date field and doent give me th ecorrect output  for the snapshot date i need mont and year of that transaction so this is wrong
     lm.pos,
     lm.sellPos AS sell_pos,
     lm.dueInterest AS due_interest,
@@ -56,10 +62,10 @@ AS
     lm.SourceFundingName AS source_funding_name,
     lm.liabilityCode AS liability_code,
 
-    /*   have to make the changes */
---     lm.     AS partner_name,
---     lm.     AS engagement_date,   -- engagement id -->>  tblporfoli engg details -- > take the start date  -- and partner id -- mstporfoliapartner -- to get the parner name
---   engagement type and assignmenttype  concat both -- for -- >  engagement_Type column
+     ped.startdate     AS engagement_date,
+     mstpp.partnername    as partner_name, -- engagement id -->>  tblporfoli engg details -- > take the start date  --   and partner id -- mstporfoliapartner -- to get the parner name
+     ped.engagementtype || '_' || ped.assignmenttype  as engagement_Type,--   engagement type and assignmenttype  concat both -- for -- >  engagement_Type column
+
     lm.roi AS roi,
 
     lm.assetclassificationdate  as asset_classification_date,
@@ -83,11 +89,14 @@ FROM
 LEFT JOIN dmihfclos.tblTypeDetail curr_status
     ON lm.statustypedetailid = curr_status.typeDetailID
     AND curr_status.isActive = 1
--- LEFT JOIN dmihfclos.tblPortfolioPartnerEngagementDetail ped
---     ON lm.engagementID = ped.engagementID
---     AND ped.isActive = 1
-  LEFT JOIN
-    dmihfclos.tblTypeDetail td ON lm.maxDeliquencyDay = td.typeDetailID
-        and  td.isactive=1
+ LEFT JOIN dmihfclos.tblPortfolioPartnerEngagementDetail ped
+     ON lm.engagementID = ped.engagementID
+     AND ped.isActive = 1
+ LEFT JOIN dmihfclos.mstportfoliopartner mstpp
+     ON ped.partnerid = mstpp.partnerid
+     AND mstpp.isActive = 1
+--  LEFT JOIN
+--    dmihfclos.tblTypeDetail td ON lm.maxDeliquencyDay = td.typeDetailID    -- this is also not used
+--        and  td.isactive=1
 
 where lm.isactive=1     ;

@@ -7,6 +7,222 @@
 -- SORTKEY(loan_application_id, signal_date)
 -- AS
 
+
+    /* ============================================================
+   DPD TREND DIRECTION + DPD BUCKET TRANSITION
+   Source  : silver.slv_contract_perf_monthly
+   Dialect : Amazon Redshift
+   Window  : 3 Months (M1 = current, M2 = prev, M3 = oldest)
+   Columns : dpd_trend_direction | dpd_bucket_transition
+   ============================================================ */
+
+WITH
+
+/* ----------------------------------------------------------------
+   STEP 1 — Rank last 3 months per loan, latest month = rn 1
+---------------------------------------------------------------- */
+dpd_ranked AS (
+    SELECT
+        loan_application_id,
+        max_dpd,
+        snapshot_date,
+        ROW_NUMBER() OVER (
+            PARTITION BY loan_application_id
+            ORDER BY snapshot_date DESC
+        ) AS rn
+    FROM silver.slv_contract_perf_monthly
+),
+
+/* ----------------------------------------------------------------
+   STEP 2 — Pivot into M1, M2, M3
+            Missing months default to 0 via COALESCE
+---------------------------------------------------------------- */
+dpd_pivot AS (
+    SELECT
+        loan_application_id,
+        COALESCE(MAX(CASE WHEN rn = 1 THEN max_dpd END), 0) AS dpd_m1,  -- current month
+        COALESCE(MAX(CASE WHEN rn = 2 THEN max_dpd END), 0) AS dpd_m2,  -- 1 month ago
+        COALESCE(MAX(CASE WHEN rn = 3 THEN max_dpd END), 0) AS dpd_m3   -- 2 months ago
+    FROM dpd_ranked
+    WHERE rn <= 3
+    GROUP BY loan_application_id
+),
+
+/* ----------------------------------------------------------------
+   STEP 3 — Map each month DPD to RBI bucket rank (0 to 4)
+---------------------------------------------------------------- */
+dpd_bucketed AS (
+    SELECT
+        loan_application_id,
+        dpd_m1,
+        dpd_m2,
+        dpd_m3,
+
+        -- Bucket rank M1 (current month)
+        CASE
+            WHEN dpd_m1 = 0                THEN 0  -- Standard
+            WHEN dpd_m1 BETWEEN 1  AND 30  THEN 1  -- SMA-0
+            WHEN dpd_m1 BETWEEN 31 AND 60  THEN 2  -- SMA-1
+            WHEN dpd_m1 BETWEEN 61 AND 90  THEN 3  -- SMA-2
+            WHEN dpd_m1 > 90               THEN 4  -- NPA
+        END AS bucket_m1,
+
+        -- Bucket rank M2 (1 month ago)
+        CASE
+            WHEN dpd_m2 = 0                THEN 0
+            WHEN dpd_m2 BETWEEN 1  AND 30  THEN 1
+            WHEN dpd_m2 BETWEEN 31 AND 60  THEN 2
+            WHEN dpd_m2 BETWEEN 61 AND 90  THEN 3
+            WHEN dpd_m2 > 90               THEN 4
+        END AS bucket_m2,
+
+        -- Bucket rank M3 (2 months ago)
+        CASE
+            WHEN dpd_m3 = 0                THEN 0
+            WHEN dpd_m3 BETWEEN 1  AND 30  THEN 1
+            WHEN dpd_m3 BETWEEN 31 AND 60  THEN 2
+            WHEN dpd_m3 BETWEEN 61 AND 90  THEN 3
+            WHEN dpd_m3 > 90               THEN 4
+        END AS bucket_m3
+
+    FROM dpd_pivot
+),
+
+/* ----------------------------------------------------------------
+   STEP 4 — Compute average bucket for recent (M1) vs historical (M2+M3)
+            and raw DPD trend across all 3 months
+---------------------------------------------------------------- */
+dpd_computed AS (
+    SELECT
+        loan_application_id,
+        dpd_m1,
+        dpd_m2,
+        dpd_m3,
+        bucket_m1,
+        bucket_m2,
+        bucket_m3,
+
+        -- Average bucket of historical 2 months (M2 + M3)
+        ROUND((bucket_m2 + bucket_m3) / 2.0, 2)  AS avg_bucket_historical,
+
+        -- Recent bucket is just M1 (current)
+        bucket_m1::FLOAT                           AS avg_bucket_recent
+
+    FROM dpd_bucketed
+),
+
+/* ----------------------------------------------------------------
+   STEP 5 — Apply 3-month trend direction logic + NPA override
+---------------------------------------------------------------- */
+dpd_trend AS (
+    SELECT
+        loan_application_id,
+        dpd_m1,
+        dpd_m2,
+        dpd_m3,
+        bucket_m1,
+        bucket_m2,
+        bucket_m3,
+        avg_bucket_recent,
+        avg_bucket_historical,
+
+        CASE
+            /* ── ALL 3 MONTHS CLEAN ─────────────────────────── */
+            WHEN dpd_m1 = 0 AND dpd_m2 = 0 AND dpd_m3 = 0
+                THEN 'Stable'
+
+            /* ── NPA OVERRIDE ───────────────────────────────────
+               Any month in last 3 is NPA (91+) → Worsening
+               Cannot upgrade until 3 consecutive clean months   */
+            WHEN bucket_m1 = 4 OR bucket_m2 = 4 OR bucket_m3 = 4
+                THEN 'Worsening'
+
+            /* ── FULLY CLEARED THIS MONTH ───────────────────── */
+            WHEN dpd_m1 = 0 AND (dpd_m2 > 0 OR dpd_m3 > 0)
+                THEN 'Improving'
+
+            /* ── NEW DELINQUENCY ────────────────────────────── */
+            WHEN dpd_m1 > 0 AND dpd_m2 = 0 AND dpd_m3 = 0
+                THEN 'Worsening'
+
+            /* ── CONSISTENT WORSENING across all 3 months ───── */
+            WHEN dpd_m1 > dpd_m2 AND dpd_m2 > dpd_m3
+                THEN 'Worsening'
+
+            /* ── CONSISTENT IMPROVING across all 3 months ───── */
+            WHEN dpd_m1 < dpd_m2 AND dpd_m2 < dpd_m3
+                THEN 'Improving'
+
+            /* ── BUCKET-LEVEL WORSENING ───────────────────────
+               Current bucket worse than avg of last 2 months   */
+            WHEN avg_bucket_recent > avg_bucket_historical + 0.5
+                THEN 'Worsening'
+
+            /* ── BUCKET-LEVEL IMPROVING ───────────────────────
+               Current bucket better than avg of last 2 months  */
+            WHEN avg_bucket_recent < avg_bucket_historical - 0.5
+                THEN 'Improving'
+
+            /* ── NPA EQUAL OVERRIDE ───────────────────────────
+               All 3 months equal but at NPA level → Stable     */
+            WHEN dpd_m1 = dpd_m2 AND dpd_m2 = dpd_m3 AND dpd_m1 >= 91
+                THEN 'Stable'
+
+            /* ── ALL EQUAL BELOW NPA → person consistently paying */
+            WHEN dpd_m1 = dpd_m2 AND dpd_m2 = dpd_m3 AND dpd_m1 < 91
+                THEN 'Improving'
+
+            /* ── DEFAULT ────────────────────────────────────── */
+            ELSE 'Stable'
+
+        END AS dpd_trend_direction,
+
+        CASE
+            WHEN avg_bucket_recent = 0 AND avg_bucket_historical = 0
+                THEN 0.00
+
+            WHEN avg_bucket_historical = 0 AND avg_bucket_recent > 0
+                THEN 100.00
+
+            ELSE
+                ROUND(
+                    ((avg_bucket_recent - avg_bucket_historical)
+                     / avg_bucket_historical) * 100
+                , 2)
+        END AS dpd_bucket_transition
+
+    FROM dpd_computed
+)
+
+/* ----------------------------------------------------------------
+   FINAL OUTPUT
+---------------------------------------------------------------- */
+SELECT
+    loan_application_id,
+    dpd_m1                  AS current_month_dpd,
+    dpd_m2                  AS prev_1_month_dpd,
+    dpd_m3                  AS prev_2_month_dpd,
+    bucket_m1               AS current_bucket_rank,
+    bucket_m2               AS prev_1_bucket_rank,
+    bucket_m3               AS prev_2_bucket_rank,
+    avg_bucket_recent,
+    avg_bucket_historical,
+    dpd_trend_direction,
+    dpd_bucket_transition
+ORDER BY loan_application_id;
+
+
+--
+--total  dpd by current day and  total dpd by  previous mont if
+--       both are =  0 then current   or stable
+--       both are = previous month total   THEN  ->  Improved
+--        m2  <  m1    then  Worsning
+--        m1 >0   and  m2 =0  -> worsning
+--        m2 >0  and   m1 =0  -> improved
+
+
+
+
 WITH  dpd_ranked AS (
     SELECT
         loan_application_id,
@@ -31,10 +247,37 @@ cte_dpd_trend AS (
     SELECT
         loan_application_id,
         CASE
-            WHEN dpd_m1 > dpd_m2 AND dpd_m2 > dpd_m3 THEN 'Worsening'
-            WHEN dpd_m1 < dpd_m2 AND dpd_m2 < dpd_m3 THEN 'Improving'
+            WHEN dpd_m1 = 0 AND dpd_m2 = 0 AND dpd_m3 = 0
+                THEN 'Stable'
+
+            WHEN bucket_m1 = 4 OR bucket_m2 = 4 OR bucket_m3 = 4
+                THEN 'Worsening'
+
+            WHEN dpd_m1 = 0 AND (dpd_m2 > 0 OR dpd_m3 > 0)
+                THEN 'Improving'
+
+            WHEN dpd_m1 > 0 AND dpd_m2 = 0 AND dpd_m3 = 0
+                THEN 'Worsening'
+
+            WHEN dpd_m1 > dpd_m2 AND dpd_m2 > dpd_m3
+                THEN 'Worsening'
+
+            WHEN dpd_m1 < dpd_m2 AND dpd_m2 < dpd_m3
+                THEN 'Improving'
+
+            WHEN avg_bucket_recent > avg_bucket_historical + 0.5
+                THEN 'Worsening'
+
+            WHEN avg_bucket_recent < avg_bucket_historical - 0.5
+                THEN 'Improving'
+
+            WHEN dpd_m1 = dpd_m2 AND dpd_m2 = dpd_m3 AND dpd_m1 >= 91
+                THEN 'Stable'
+            WHEN dpd_m1 = dpd_m2 AND dpd_m2 = dpd_m3 AND dpd_m1 < 91
+                THEN 'Improving'
             ELSE 'Stable'
-        END AS dpd_trend_direction
+
+        END AS dpd_trend_direction,
     FROM dpd_pivot
 ),
 customer_ranked AS (
@@ -50,21 +293,24 @@ customer_dedup AS (
     FROM customer_ranked
     WHERE rn = 1
 ),
+
+
 entity_dpd AS (
     SELECT
-        cd1.loan_application_id,
+        count(cd1.loan_application_id)  AS cnt_loan_application_id,
+        ta.parent_applicant_id,
         MAX(cpm.max_dpd) AS max_entity_dpd
     FROM customer_dedup cd1
-    JOIN customer_dedup cd2
-        ON cd1.entity_id = cd2.entity_id
+    left join silver.slv_customer ta  on ta.loan_application_id = cd1.loan_application_id
     JOIN silver.slv_contract_perf_monthly cpm
         ON cd2.loan_application_id = cpm.loan_application_id
-    GROUP BY cd1.loan_application_id
+    GROUP BY cd1.parent_applicant_id
 ),
 cte_multi_loan_stress AS (
     SELECT
         loan_application_id,
-        CASE WHEN max_entity_dpd > 0 THEN TRUE ELSE FALSE END AS multi_loan_stress
+        CASE WHEN max_entity_dpd > 0 THEN TRUE
+         AND cnt_loan_application_id > 0 ELSE FALSE END AS multi_loan_stress
     FROM entity_dpd
 ),
 cte_asset AS (
@@ -77,6 +323,15 @@ cte_asset AS (
     FROM silver.slv_asset
     GROUP BY loan_application_id
 ),
+cte_non_starter_first(
+    SELECT
+        la.loan_application_id,
+        TRUE AS non_starter_sma1_flag,
+        row_number ()  over (partitions by loan_application_id order by duedate ) rn
+    FROM dmihfclos.tblloanapplicationpayschedule  la
+    where duedate < currentdate  and la.isactive =1
+    )
+
 -- [NEW — Signal 1]
 cte_non_starter AS (
     SELECT
@@ -84,24 +339,24 @@ cte_non_starter AS (
         TRUE AS non_starter_sma1_flag
     FROM silver.slv_loan_details        la
     JOIN silver.slv_repayment_behavior  rb
-        ON la.loan_application_id = rb.loan_application_id
-    JOIN dmihfclos.tblloanduestatus     lds
-        ON la.loan_application_id = lds.loanapplicationid
+        ON la.loan_application_id = rb.loan_application_id  and rb.isactive =1
+    JOIN dmihfclos.tblloanmonthly     lds
+        ON la.loan_application_id = lds.loanapplicationid   and lds.isactive=1
     WHERE la.loanstatus_typedetail_id= 189 -- active loan
-      AND (rb.payment_received_date IS NULL) -- no payment received
+      AND (rb.payment_received_date IS NULL) -- no payment received   -- rn by 2 by dates
       AND  (rb.is_overdue IS NULL OR rb.is_overdue = FALSE)  -- no clearance
       AND lds.deliquencybktdetailid IN (2570, 2571, 2572)  -- SMA-1, SMA-2, NPA
     GROUP BY la.loan_application_id
 ),
 
--- [NEW — Signal 2]
+-- [NEW — Signal 2]-- done
 cte_active_sma2 AS (
     SELECT
         la.loan_application_id,
         TRUE AS active_sma2_flag
     FROM silver.slv_loan_details    la
-    JOIN dmihfclos.tblloanduestatus lds
-        ON la.loan_application_id = lds.loanapplicationid
+    JOIN dmihfclos.tblloanmonthly lds
+        ON la.loan_application_id = lds.loanapplicationid   and lds.isactive =1
     WHERE la.loanstatus_typedetail_id= 189          -- active loan
       AND lds.deliquencybktdetailid = 2571    -- SMA-2
     GROUP BY la.loan_application_id
@@ -113,39 +368,40 @@ cte_ach_not_registered AS (
         la.loan_application_id,
         TRUE AS ach_not_registered_sma1_flag
     FROM silver.slv_loan_details    la
-    JOIN  dmihfclos.tblLoanApplicationACH    ach
+    JOIN dmihfclos.tblloanmonthly  lds
+        ON la.loan_application_id = lds.loanapplicationid  and lds.isactive=1
+    left JOIN  dmihfclos.tblLoanApplicationACH    ach
         ON la.loan_application_id = ach.loanapplicationid
-    JOIN dmihfclos.tblloanduestatus lds
-        ON la.loan_application_id = lds.loanapplicationid
+
     WHERE la.loanstatus_typedetail_id= 189
         AND (
            ach.registered IS NULL
         OR ach.registered = 0
         )      AND (ach.registeredstatustypedetailid IS NULL
-           OR ach.registeredstatustypedetailid <> 1991)
+           OR ach.registeredstatustypedetailid <> 1991)  and ach.isactive =1
       AND lds.deliquencybktdetailid IN (2570, 2571, 2572)  -- SMA-1, SMA-2, NPA
     GROUP BY la.loan_application_id
 ),
 
--- [NEW — Signal 4]
+-- [NEW — Signal 4] -- done
 cte_construction_delay AS (
     SELECT
         la.loan_application_id,
         TRUE AS construction_delay_sma1_flag
     FROM silver.slv_loan_details    la
-    JOIN dmihfclos.tblloanduestatus lds
-        ON la.loan_application_id = lds.loanapplicationid
+    JOIN dmihfclos.tblloanmonthly lds
+        ON la.loan_application_id = lds.loanapplicationid  and lds.isactive =1
     WHERE la.loanstatus_typedetail_id= 189
-    --   AND la.loan_purpose_id IN (1801  )          --('PCBUILDER', 'RENOVATION', 'PLOTCONSTRUCTION')
+       AND la.loan_purpose_id IN (16, 1, 5  )    --('PCBUILDER', 'RENOVATION', 'PLOTCONSTRUCTION')
 
       AND la.first_disbursal_date <= ADD_MONTHS(CURRENT_DATE, -18)
-    --   AND la.is_Actually_Fully_Disbursed = 0
+       AND ( la.is_Actually_Fully_Disbursed = 0 or  la.is_Actually_Fully_Disbursed is null )
     --   AND total_disbursed_amount = first_disbursed_amount
       AND lds.deliquencybktdetailid = 2570    -- SMA-1
     GROUP BY la.loan_application_id
 ),
 
--- [NEW — Signal 5]
+-- [NEW — Signal 5]  --done
 cte_title_doc_delay AS (
     SELECT
         la.loan_application_id,
@@ -164,7 +420,7 @@ cte_title_doc_delay AS (
     GROUP BY la.loan_application_id
 ),
 
--- [NEW — Signal 6]
+-- [NEW — Signal 6] -- done 
 cte_bounce_fy AS (
     SELECT
         la.loan_application_id,
@@ -205,6 +461,7 @@ cte_base AS (
         -- Collateral & customer signals
         COALESCE(ast.negative_area_flag, FALSE) AS negative_area_flag,
         COALESCE(mls.multi_loan_stress, FALSE)  AS multi_loan_stress,
+
         CASE WHEN ld.final_foir_pct > 65
              THEN TRUE ELSE FALSE END AS high_foir_flag,
 
@@ -298,12 +555,12 @@ cte_scored AS (
 
         -- Derived indicator summary string (ews_indicators column per mapping)
         TRIM(
-            CASE WHEN non_starter_sma1_flag = TRUE THEN 'NON_STARTER;' ELSE '' END
-            || CASE WHEN active_sma2_flag = TRUE THEN 'ACTIVE_SMA2;' ELSE '' END
-            || CASE WHEN ach_not_registered_sma1_flag= TRUE THEN 'ACH_NOT_REGISTERED;'  ELSE '' END
-            || CASE WHEN construction_delay_sma1_flag= TRUE THEN 'CONSTRUCTION_DELAY_18M;'   ELSE '' END
-            || CASE WHEN title_doc_delay_flag = TRUE THEN 'TITLE_DOC_DELAY_3M;' ELSE '' END
-            || CASE WHEN bounce_fy_sma1_flag = TRUE THEN 'BOUNCE_FY_3PLUS;' ELSE '' END
+            CASE WHEN non_starter_sma1_flag = TRUE THEN 'NON_STARTER; & SMA1 OR ABOVE' ELSE '' END
+            || CASE WHEN active_sma2_flag = TRUE THEN 'ACTIVE & ACTIVE_SMA2;' ELSE '' END
+            || CASE WHEN ach_not_registered_sma1_flag= TRUE THEN 'ACH_NOT_REGISTERED; 7 SMA1 AND ABOVE '  ELSE '' END
+            || CASE WHEN construction_delay_sma1_flag= TRUE THEN 'CONSTRUCTION_DELAY_18M; & SMA1'   ELSE '' END
+            || CASE WHEN title_doc_delay_flag = TRUE THEN 'TITLE_DOC_DELAY_3M; $ DELAY FOR MORE THAN = 3 MONTHS' ELSE '' END
+            || CASE WHEN bounce_fy_sma1_flag = TRUE THEN 'BOUNCE_FY_3PLUS;  &  SMA1 ' ELSE '' END
             || CASE WHEN high_foir_flag = TRUE THEN 'HIGH_FOIR;' ELSE '' END
             || CASE WHEN multi_loan_stress = TRUE THEN 'MULTI_LOAN_STRESS;' ELSE '' END
             || CASE WHEN dpd_trend_direction = 'Worsening' THEN 'DPD_WORSENING;' ELSE '' END

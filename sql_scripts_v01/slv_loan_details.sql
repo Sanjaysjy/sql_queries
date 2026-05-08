@@ -315,7 +315,7 @@ SourcingChannelDetails AS (
         ON la.channelPartnerDsaID = dr.dsaID
         AND dr.isActive = 1
 ),
-
+--- need confirmation on this from  dmi
 LinkedLoans AS (
     SELECT
         loanApplicationID AS loan_application_id,
