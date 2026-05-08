@@ -56,6 +56,7 @@ SELECT
     CAST(lds.maxdeliquencyday  AS INT) AS max_dpd,
     lds.deliquencybktdetailid  AS dpd_bucket,
     CAST(COALESCE(CAST(lds.isnpa AS INT), 0) AS BOOLEAN) AS is_npa,
+    lds.npastartdate    AS npa_start_date,
     COALESCE(CAST(ra.receipt_count AS INT), CAST(0 AS INT)) AS daily_receipt_count,
     COALESCE(CAST(ra.receipt_amount AS DECIMAL(18, 2)), CAST(0 AS DECIMAL(18, 2))) AS daily_receipt_amount,
     COALESCE(CAST(pa.presentation_count  AS INT), CAST(0 AS INT)) AS daily_presentations,
