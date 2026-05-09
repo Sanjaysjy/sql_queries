@@ -116,7 +116,7 @@ SELECT
     CURRENT_TIMESTAMP AS silver_loaded_at,
     TO_CHAR(GETDATE(),'YYYYMMDD_HH24MISS') AS silver_batch_id
 --    is_employee_loan  silver. loan details
---- income_considered  -- customer tbl silver
+--- income_considered  -- customer tbl silver 
 
 
 FROM cte_npa_date lds
