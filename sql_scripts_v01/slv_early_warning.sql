@@ -124,7 +124,7 @@ cte_non_starter_first AS (
             la.clearenceflag,
             ROW_NUMBER() OVER (
                 PARTITION BY la.loanapplicationid
-                ORDER BY la.duedate
+                ORDER BY la.duedate  ASC
             ) AS rn
         FROM dmihfclos.tblloanapplicationpayschedule la
         INNER JOIN dmihfclos.tblloanapplication tl
