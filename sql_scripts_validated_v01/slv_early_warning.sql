@@ -530,7 +530,16 @@ WHERE NOT EXISTS (
       AND tgt.snapshot_type       = src.snapshot_type
 );
 
+--  to remove the months other date rows except current date
+--DELETE FROM silver.slv_early_warning
+--WHERE snapshot_type = 'CURRENT_DAY'
+--  AND signal_date < (
+--      SELECT MAX(signal_date)
+--      FROM silver.slv_early_warning
+--      WHERE snapshot_type = 'CURRENT_DAY'
+--  );
 
+-- to remove row  before 18 months olds
 DELETE FROM silver.slv_early_warning
 WHERE signal_date < ADD_MONTHS(CURRENT_DATE, -18);
 
