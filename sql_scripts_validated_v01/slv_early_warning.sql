@@ -1,13 +1,41 @@
 -- silver.slv_early_warning_risk
 
-drop table if exists silver.slv_early_warning;
+-- historical retain of 18 months
+-- Run the CREATE block only once during initial setup.
 
-CREATE TABLE silver.slv_early_warning
+CREATE TABLE IF NOT EXISTS silver.slv_early_warning
+(
+    ews_id                        BIGINT,
+    loan_application_id           VARCHAR(50),
+    signal_date                   DATE,
+    snapshot_type                 VARCHAR(20),    -- ADDED: 'MONTH_END' or 'CURRENT_DAY'
+    snapshot_month                DATE,           -- ADDED: LAST_DAY of the signal_date month
+    dpd_trend_direction           VARCHAR(20),
+    negative_area_flag            BOOLEAN,
+    multi_loan_stress             BOOLEAN,
+    high_foir_flag                BOOLEAN,
+    non_starter_sma1_flag         BOOLEAN,
+    active_sma2_flag              BOOLEAN,
+    ach_not_registered_sma1_flag  BOOLEAN,
+    construction_delay_sma1_flag  BOOLEAN,
+    title_doc_delay_flag          BOOLEAN,
+    bounce_fy_sma1_flag           BOOLEAN,
+    ews_risk_score                INT,
+    ews_risk_grade                VARCHAR(20),
+    recommended_action            VARCHAR(500),
+    ews_indicators                VARCHAR(1000),
+    previous_month_ews_score      INT,           -- ADDED
+    score_variance                INT,           -- ADDED
+    score_trend                   VARCHAR(20),   -- ADDED
+    gold_loaded_at                TIMESTAMP,
+    gold_batch_id                 VARCHAR(20),
+    reporting_period              DATE
+)
 DISTKEY(loan_application_id)
-SORTKEY(loan_application_id, signal_date)
-AS
+SORTKEY(loan_application_id, signal_date);
 
 
+INSERT INTO silver.slv_early_warning
 
 --
 --total  dpd by current day and  total dpd by  previous mont if
@@ -259,6 +287,14 @@ cte_base AS (
     SELECT
         ld.loan_application_id,
         CURRENT_DATE AS signal_date,
+        -- ADDED
+        CASE
+            WHEN CURRENT_DATE = LAST_DAY(CURRENT_DATE)
+                 THEN 'MONTH_END'
+            ELSE 'CURRENT_DAY'
+        END AS snapshot_type,
+        -- ADDED
+        LAST_DAY(CURRENT_DATE) AS snapshot_month,
 
         -- consecutive_bounces: source column unavailable
         -- COALESCE(cb.consecutive_bounces, 0)  AS consecutive_bounces,
@@ -312,6 +348,10 @@ cte_scored AS (
     SELECT
         loan_application_id,
         signal_date,
+
+        snapshot_type,    -- ADDED
+
+        snapshot_month,   -- ADDED
 
         -- Signal columns
         -- consecutive_bounces,
@@ -378,66 +418,98 @@ cte_scored AS (
         ) AS ews_indicators
 
     FROM cte_base
+),
+
+cte_prev_score AS (
+    SELECT
+        loan_application_id,
+        ews_risk_score AS previous_month_ews_score
+    FROM (
+        SELECT
+            loan_application_id,
+            ews_risk_score,
+            ROW_NUMBER() OVER (
+                PARTITION BY loan_application_id
+                ORDER BY signal_date DESC
+            ) AS rn
+        FROM silver.slv_early_warning
+        WHERE snapshot_type = 'MONTH_END'
+    ) t
+    WHERE rn = 1
 )
 
 SELECT
-    ROW_NUMBER() OVER (ORDER BY loan_application_id) AS ews_id,
-    loan_application_id,
-    signal_date,
+    ROW_NUMBER() OVER (ORDER BY src.loan_application_id) AS ews_id,
+    src.loan_application_id,
+    src.signal_date,
+
+    src.snapshot_type,    -- ADDED
+
+    src.snapshot_month,   -- ADDED
 
     -- Repayment signals
     -- consecutive_bounces, --- more than 3 bounce    --  source column unavailable in repayment slv table add and pull here -- create a cte for this  count(((  -- tbl oan appl pay schedule-.. pay schedule id ,, mapp it with --> tbl loan appli charge details ,,, pay schedu id column ,, with a condition --> typedetails charge _id =1  and charge for typew detail id =1561  and is active =1
-    dpd_trend_direction, -- Worsening/Stable/Improving
+    src.dpd_trend_direction, -- Worsening/Stable/Improving
 
     -- emi_increase_stress,    -- current_emi not in slv_loan_details DDL
     -- ltv_breach_flag,        --  currentLTV/ltvNorm not in source DDL  --> pos / coal(latest value , market value)  decimal  .2    -->> case for this on condition
 
     -- Collateral signals
-    negative_area_flag, -- Property in negative area
+    src.negative_area_flag, -- Property in negative area
 
     -- Customer signals
-    multi_loan_stress, -- Multiple loans with DPD
-    high_foir_flag, -- FOIR > 65%
+    src.multi_loan_stress, -- Multiple loans with DPD
+    src.high_foir_flag, -- FOIR > 65%
 
     -- New signals (v2)
-    non_starter_sma1_flag, -- Signal 1
-    active_sma2_flag, -- Signal 2
-    ach_not_registered_sma1_flag, -- Signal 3
-    construction_delay_sma1_flag, -- Signal 4
-    title_doc_delay_flag, -- Signal 5
-    bounce_fy_sma1_flag, -- Signal 6
+    src.non_starter_sma1_flag, -- Signal 1
+    src.active_sma2_flag, -- Signal 2
+    src.ach_not_registered_sma1_flag, -- Signal 3
+    src.construction_delay_sma1_flag, -- Signal 4
+    src.title_doc_delay_flag, -- Signal 5
+    src.bounce_fy_sma1_flag, -- Signal 6
 
     -- Composite
-    ews_risk_score, -- 0–100 weighted
+    src.ews_risk_score, -- 0–100 weighted
     CASE
-        WHEN ews_risk_score BETWEEN  0 AND 25  THEN 'Green'
-        WHEN ews_risk_score BETWEEN 26 AND 50  THEN 'Amber'
-        WHEN ews_risk_score BETWEEN 51 AND 75  THEN 'Red'
-        WHEN ews_risk_score BETWEEN 76 AND 100 THEN 'Critical'
+        WHEN src.ews_risk_score BETWEEN  0 AND 25  THEN 'Green'
+        WHEN src.ews_risk_score BETWEEN 26 AND 50  THEN 'Amber'
+        WHEN src.ews_risk_score BETWEEN 51 AND 75  THEN 'Red'
+        WHEN src.ews_risk_score BETWEEN 76 AND 100 THEN 'Critical'
     END AS ews_risk_grade, -- Green/Amber/Red/Critical
 
     CASE
         -- Critical tier
-        WHEN ews_risk_score BETWEEN 76 AND 100 AND negative_area_flag = TRUE
+        WHEN src.ews_risk_score BETWEEN 76 AND 100 AND src.negative_area_flag = TRUE
             THEN 'Immediate field visit required. Initiate legal notice and NPA provisioning review. Flag for collateral re-valuation.'
-        WHEN ews_risk_score BETWEEN 76 AND 100
+        WHEN src.ews_risk_score BETWEEN 76 AND 100
             THEN 'Immediate field visit required. Initiate legal notice and NPA provisioning review.'
         -- Red tier
-        WHEN ews_risk_score BETWEEN 51 AND 75 AND negative_area_flag = TRUE
+        WHEN src.ews_risk_score BETWEEN 51 AND 75 AND src.negative_area_flag = TRUE
             THEN 'Telephonic follow-up. Evaluate OTS or restructuring options. Flag for collateral re-valuation.'
-        WHEN ews_risk_score BETWEEN 51 AND 75
+        WHEN src.ews_risk_score BETWEEN 51 AND 75
             THEN 'Telephonic follow-up. Evaluate OTS or restructuring options.'
         -- Amber tier
-        WHEN ews_risk_score BETWEEN 26 AND 50 AND negative_area_flag = TRUE
+        WHEN src.ews_risk_score BETWEEN 26 AND 50 AND src.negative_area_flag = TRUE
             THEN 'Monitor closely. Send payment reminder communication. Flag for collateral re-valuation.'
-        WHEN ews_risk_score BETWEEN 26 AND 50
+        WHEN src.ews_risk_score BETWEEN 26 AND 50
             THEN 'Monitor closely. Send payment reminder communication.'
         -- Green tier
-        WHEN negative_area_flag = TRUE
+        WHEN src.negative_area_flag = TRUE
             THEN 'No action required. Standard monitoring applies. Flag for collateral re-valuation.'
         ELSE 'No action required. Standard monitoring applies.'
     END AS recommended_action,
-    ews_indicators,
+    src.ews_indicators,
+
+    ps.previous_month_ews_score,
+    src.ews_risk_score - ps.previous_month_ews_score  AS score_variance,
+    CASE
+        WHEN (src.ews_risk_score - ps.previous_month_ews_score) > 0  THEN 'WORSENING'
+        WHEN (src.ews_risk_score - ps.previous_month_ews_score) < 0  THEN 'IMPROVING'
+        WHEN ps.previous_month_ews_score IS NULL                      THEN 'NEW'
+        ELSE 'STABLE'
+    END AS score_trend,
+
     -- Audit columns
     SYSDATE AS gold_loaded_at,
     TO_CHAR(SYSDATE, 'YYYYMMDD_HH24MISS') AS gold_batch_id,
@@ -446,8 +518,21 @@ SELECT
         ELSE LAST_DAY(CURRENT_DATE)
     END AS reporting_period
 
-FROM cte_scored;
+FROM cte_scored src
+LEFT JOIN cte_prev_score ps
+    ON src.loan_application_id = ps.loan_application_id
+-- removes dedup of rows in table
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM silver.slv_early_warning tgt
+    WHERE tgt.loan_application_id = src.loan_application_id
+      AND tgt.signal_date         = src.signal_date
+      AND tgt.snapshot_type       = src.snapshot_type
+);
 
+
+DELETE FROM silver.slv_early_warning
+WHERE signal_date < ADD_MONTHS(CURRENT_DATE, -18);
 
 
 /*   Report as of today  and month End.(history)
